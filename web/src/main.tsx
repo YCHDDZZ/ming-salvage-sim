@@ -6,8 +6,10 @@ import {
   Edit3,
   Landmark,
   Loader2,
+  LogOut,
   MapPinned,
   Menu,
+  Power,
   RotateCcw,
   Save,
   Send,
@@ -438,7 +440,19 @@ const getMapIntelStyle = (node: MapNode): React.CSSProperties => {
   return style;
 };
 
+type AppView = "menu" | "game";
+
+type MenuStatus = {
+  has_api_key: boolean;
+  has_running_game: boolean;
+  has_main_db: boolean;
+  saves: Array<{ name: string; size: number; mtime: number }>;
+  llm: { base_url: string; model: string; has_api_key: boolean };
+};
+
 function App() {
+  const [appView, setAppView] = React.useState<AppView>("menu");
+  const [menuStatus, setMenuStatus] = React.useState<MenuStatus | null>(null);
   const [state, setState] = React.useState<GameState | null>(null);
   const [selectedNodeId, setSelectedNodeId] = React.useState<string>("");
   const [mapIntelOpen, setMapIntelOpen] = React.useState(false);
@@ -460,6 +474,7 @@ function App() {
   const [editingDirectiveText, setEditingDirectiveText] = React.useState("");
   const [decree, setDecree] = React.useState("");
   const [report, setReport] = React.useState("");
+  const [gazetteReport, setGazetteReport] = React.useState("");
   const [busy, setBusy] = React.useState("");
   const [error, setError] = React.useState("");
   const [settleStage, setSettleStage] = React.useState("");
@@ -500,9 +515,34 @@ function App() {
     await loadState();  // 重新拉 state，新 portrait_id 流回卡片
   }, [loadState]);
 
+  const refreshMenuStatus = React.useCallback(async () => {
+    const s = await api<MenuStatus>("/api/menu/status");
+    setMenuStatus(s);
+    return s;
+  }, []);
+
   React.useEffect(() => {
-    loadState().catch((err) => setError(err.message));
+    refreshMenuStatus()
+      .then((s) => {
+        if (s.has_running_game) {
+          setAppView("game");
+          loadState().catch((err) => setError(err.message));
+        }
+      })
+      .catch((err) => setError(err.message));
+  }, [refreshMenuStatus, loadState]);
+
+  const enterGameAfterMenu = React.useCallback(async () => {
+    setAppView("game");
+    await loadState();
   }, [loadState]);
+
+  const exitToMenu = React.useCallback(async () => {
+    await fetch("/api/menu/exit_to_menu", { method: "POST" });
+    setState(null);
+    setAppView("menu");
+    await refreshMenuStatus();
+  }, [refreshMenuStatus]);
 
   React.useEffect(() => {
     if (!state) return;
@@ -524,7 +564,7 @@ function App() {
     if (!summary) return;
     if (summary.startsWith("登基伊始")) return;
     if (currentTurn === gazetteShown) return;
-    setReport(summary);
+    setGazetteReport(summary);
     setActiveModal("report");
     setGazetteShown(currentTurn);
   }, [state, gazetteShown]);
@@ -555,6 +595,18 @@ function App() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [mapIntelOpen]);
+
+  if (appView === "menu") {
+    return (
+      <MenuPage
+        status={menuStatus}
+        onRefresh={refreshMenuStatus}
+        onEnterGame={enterGameAfterMenu}
+        error={error}
+        setError={setError}
+      />
+    );
+  }
 
   if (!state) {
     return (
@@ -944,8 +996,8 @@ function App() {
         </FullscreenModal>
       ) : null}
 
-      {activeModal === "report" && report ? (
-        <ReportModal report={report} onClose={guardClose(() => setActiveModal("none"))} />
+      {activeModal === "report" && (gazetteReport || report) ? (
+        <ReportModal report={gazetteReport || report} onClose={guardClose(() => setActiveModal("none"))} />
       ) : null}
 
       {activeModal === "extraction" ? (
@@ -962,6 +1014,10 @@ function App() {
           onAfterLoad={() => {
             setActiveModal("none");
             window.location.reload();
+          }}
+          onExitToMenu={async () => {
+            await exitToMenu();
+            setActiveModal("none");
           }}
         />
       ) : null}
@@ -1725,8 +1781,16 @@ function HistoryModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function GameMenuModal({ onClose, onAfterLoad }: { onClose: () => void; onAfterLoad: () => void }) {
-  const [tab, setTab] = React.useState<"save" | "load" | "llm" | "reset">("save");
+function GameMenuModal({
+  onClose,
+  onAfterLoad,
+  onExitToMenu,
+}: {
+  onClose: () => void;
+  onAfterLoad: () => void;
+  onExitToMenu: () => void;
+}) {
+  const [tab, setTab] = React.useState<"save" | "load" | "llm" | "reset" | "exit_menu" | "shutdown">("save");
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -1758,12 +1822,20 @@ function GameMenuModal({ onClose, onAfterLoad }: { onClose: () => void; onAfterL
             <button className={tab === "reset" ? "active" : ""} onClick={() => setTab("reset")}>
               <RotateCcw size={14} /> 重开新局
             </button>
+            <button className={tab === "exit_menu" ? "active" : ""} onClick={() => setTab("exit_menu")}>
+              <LogOut size={14} /> 回到主菜单
+            </button>
+            <button className={tab === "shutdown" ? "active" : ""} onClick={() => setTab("shutdown")}>
+              <Power size={14} /> 退出游戏
+            </button>
           </nav>
           <div className="game-menu-body">
             {tab === "save" ? <SaveTab /> : null}
             {tab === "load" ? <LoadTab onAfterLoad={onAfterLoad} /> : null}
             {tab === "llm" ? <LLMConfigTab /> : null}
             {tab === "reset" ? <ResetTab onAfterReset={onAfterLoad} /> : null}
+            {tab === "exit_menu" ? <ExitToMenuTab onExit={onExitToMenu} /> : null}
+            {tab === "shutdown" ? <ShutdownTab /> : null}
           </div>
         </div>
       </div>
@@ -1916,6 +1988,70 @@ function ResetTab({ onAfterReset }: { onAfterReset: () => void }) {
         />
         <button className="menu-btn danger" onClick={onReset} disabled={!canReset || busy}>
           {busy ? <Loader2 size={14} className="spin" /> : <RotateCcw size={14} />} 重开新局
+        </button>
+      </div>
+      {err ? <div className="menu-error">{err}</div> : null}
+    </section>
+  );
+}
+
+function ExitToMenuTab({ onExit }: { onExit: () => void | Promise<void> }) {
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState("");
+  const onClick = async () => {
+    if (!window.confirm("回到主菜单？当前对局会关闭（DB 仍保留，可从「继续上局」回到此处）。")) return;
+    setBusy(true);
+    setErr("");
+    try {
+      await onExit();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="menu-section">
+      <h3>回到主菜单</h3>
+      <p className="menu-hint">
+        关闭当前游戏会话，回到主菜单。数据库与存档不变；可从主菜单「继续上局」或「加载存档」回到游戏。
+      </p>
+      <div className="menu-row">
+        <button className="menu-btn primary" onClick={onClick} disabled={busy}>
+          {busy ? <Loader2 size={14} className="spin" /> : <LogOut size={14} />} 回到主菜单
+        </button>
+      </div>
+      {err ? <div className="menu-error">{err}</div> : null}
+    </section>
+  );
+}
+
+function ShutdownTab() {
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState("");
+  const onClick = async () => {
+    if (!window.confirm("退出整个游戏？前后端进程都会关闭，未保存的进度会丢失。")) return;
+    setBusy(true);
+    setErr("");
+    try {
+      await fetch("/api/menu/shutdown", { method: "POST" });
+      // server 已发 SIGTERM 给自己；前端尝试关页面（浏览器可能拦截），否则提示用户。
+      setTimeout(() => {
+        try { window.close(); } catch { /* noop */ }
+      }, 400);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="menu-section">
+      <h3>退出游戏</h3>
+      <p className="menu-hint">
+        终止服务进程并尝试关闭浏览器页面。<b>未保存的进度会丢失</b>。要保留当前局，先到「保存存档」。
+      </p>
+      <div className="menu-row">
+        <button className="menu-btn danger" onClick={onClick} disabled={busy}>
+          {busy ? <Loader2 size={14} className="spin" /> : <Power size={14} />} 退出游戏
         </button>
       </div>
       {err ? <div className="menu-error">{err}</div> : null}
@@ -3008,6 +3144,208 @@ function Info({ label, value, tone }: { label: string; value: React.ReactNode; t
     <div className={`info-cell ${tone || ""}`}>
       <span>{label}</span>
       <b>{value}</b>
+    </div>
+  );
+}
+
+function MenuPage({
+  status,
+  onRefresh,
+  onEnterGame,
+  error,
+  setError,
+}: {
+  status: MenuStatus | null;
+  onRefresh: () => Promise<MenuStatus>;
+  onEnterGame: () => Promise<void>;
+  error: string;
+  setError: (msg: string) => void;
+}) {
+  const [busy, setBusy] = React.useState<string>("");
+  const [showApiForm, setShowApiForm] = React.useState(false);
+  const [showSaveList, setShowSaveList] = React.useState(false);
+
+  const guard = async (label: string, fn: () => Promise<void>) => {
+    setBusy(label);
+    setError("");
+    try {
+      await fn();
+    } catch (err: any) {
+      setError(err?.message || String(err));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const onNewGame = () =>
+    guard("新游戏中...", async () => {
+      if (status?.has_main_db && !window.confirm("将覆盖当前主进度，是否继续？建议先在游戏中保存为存档。")) return;
+      await api("/api/menu/new_game", { method: "POST" });
+      await onEnterGame();
+    });
+
+  const onContinue = () =>
+    guard("载入上次进度...", async () => {
+      await api("/api/menu/continue", { method: "POST" });
+      await onEnterGame();
+    });
+
+  const onLoadSave = (name: string) =>
+    guard(`载入「${name}」...`, async () => {
+      await api(`/api/menu/load_save/${encodeURIComponent(name)}`, { method: "POST" });
+      await onEnterGame();
+    });
+
+  const hasKey = !!status?.has_api_key;
+  const hasMainDb = !!status?.has_main_db;
+  const saves = status?.saves || [];
+
+  return (
+    <div className="menu-screen">
+      <div className="menu-panel">
+        <h1 className="menu-title">明末力挽狂澜</h1>
+        <p className="menu-subtitle">崇祯元年正月 · 召大臣议天下事</p>
+
+        {!hasKey && (
+          <div className="menu-notice">尚未配置 API 接口。请先「设置 API」。</div>
+        )}
+        {error && <div className="menu-error">{error}</div>}
+
+        <div className="menu-buttons">
+          <button className="menu-btn primary" disabled={!hasKey || !!busy} onClick={onNewGame}>
+            开始新游戏
+          </button>
+          <button className="menu-btn" disabled={!hasKey || !hasMainDb || !!busy} onClick={onContinue} title={hasMainDb ? "" : "无上次进度"}>
+            继续
+          </button>
+          <button className="menu-btn" disabled={!hasKey || !!busy || !saves.length} onClick={() => setShowSaveList(true)} title={saves.length ? "" : "暂无存档"}>
+            加载存档 {saves.length ? `(${saves.length})` : ""}
+          </button>
+          <button className="menu-btn" disabled={!!busy} onClick={() => setShowApiForm(true)}>
+            设置 API {hasKey ? "" : "（必需）"}
+          </button>
+        </div>
+
+        {busy && <div className="menu-busy">{busy}</div>}
+        {hasKey && status?.llm && (
+          <div className="menu-llm-info">
+            当前接口：{status.llm.base_url} · {status.llm.model}
+          </div>
+        )}
+      </div>
+
+      {showApiForm && (
+        <ApiSettingsModal
+          initial={status?.llm}
+          onClose={() => setShowApiForm(false)}
+          onSaved={async () => {
+            setShowApiForm(false);
+            await onRefresh();
+          }}
+        />
+      )}
+
+      {showSaveList && (
+        <SaveListModal
+          saves={saves}
+          onClose={() => setShowSaveList(false)}
+          onLoad={async (name) => {
+            setShowSaveList(false);
+            await onLoadSave(name);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ApiSettingsModal({
+  initial,
+  onClose,
+  onSaved,
+}: {
+  initial?: { base_url: string; model: string; has_api_key: boolean };
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [baseUrl, setBaseUrl] = React.useState(initial?.base_url || "https://api.deepseek.com");
+  const [model, setModel] = React.useState(initial?.model || "deepseek-chat");
+  const [apiKey, setApiKey] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState("");
+
+  const onSave = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      await api("/api/menu/llm", {
+        method: "POST",
+        body: JSON.stringify({ base_url: baseUrl.trim(), model: model.trim(), api_key: apiKey.trim() }),
+      });
+      await onSaved();
+    } catch (e: any) {
+      setErr(e?.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="menu-modal-bg" onClick={onClose}>
+      <div className="menu-modal" onClick={(e) => e.stopPropagation()}>
+        <h2>设置 API</h2>
+        <p className="menu-hint">推荐 DeepSeek（中文好、价格便宜）。配置写入本地，不上传。</p>
+        <label>
+          Base URL
+          <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.deepseek.com" />
+        </label>
+        <label>
+          Model
+          <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="deepseek-chat" />
+        </label>
+        <label>
+          API Key
+          <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={initial?.has_api_key ? "(已配置；如需更换请重新填写)" : "sk-..."} />
+        </label>
+        {err && <div className="menu-error">{err}</div>}
+        <div className="menu-modal-actions">
+          <button onClick={onClose} disabled={busy}>取消</button>
+          <button className="primary" onClick={onSave} disabled={busy || !baseUrl.trim() || !model.trim() || !apiKey.trim()}>
+            {busy ? "保存中..." : "保存"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SaveListModal({
+  saves,
+  onClose,
+  onLoad,
+}: {
+  saves: Array<{ name: string; size: number; mtime: number }>;
+  onClose: () => void;
+  onLoad: (name: string) => Promise<void>;
+}) {
+  return (
+    <div className="menu-modal-bg" onClick={onClose}>
+      <div className="menu-modal" onClick={(e) => e.stopPropagation()}>
+        <h2>加载存档</h2>
+        <ul className="menu-save-list">
+          {saves.map((s) => (
+            <li key={s.name}>
+              <button onClick={() => onLoad(s.name)}>
+                <span className="save-name">{s.name}</span>
+                <span className="save-meta">{new Date(s.mtime * 1000).toLocaleString("zh-CN")}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="menu-modal-actions">
+          <button onClick={onClose}>关闭</button>
+        </div>
+      </div>
     </div>
   );
 }

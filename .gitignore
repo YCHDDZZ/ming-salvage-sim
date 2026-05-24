@@ -13,7 +13,8 @@ env/
 !.env.example
 *.local
 secrets/
-
+build
+dist
 # Logs and runtime files
 *.log
 logs/

@@ -1,14 +1,17 @@
 """模块级常量：路径、单位、字段表、别名映射、控制指令集。
 
-L0 叶子模块——不 import 包内其它模块。
+L1：仅依赖 ming_sim.paths（L0）做 frozen-aware 路径解析。
 """
 
 from __future__ import annotations
 
 import os
 
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONTENT_DIR = os.path.join(ROOT_DIR, "content")
+from ming_sim.paths import bundled_path, bundled_root
+
+# 只读资源根：源码=仓库根，frozen=_MEIPASS。
+ROOT_DIR = str(bundled_root())
+CONTENT_DIR = bundled_path("content")
 WRAP = 88
 MONEY_UNIT = "万两"
 ECONOMY_ACCOUNTS = ("国库", "内库")

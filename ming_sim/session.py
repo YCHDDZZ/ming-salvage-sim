@@ -24,8 +24,13 @@ from ming_sim.decree import advance_without_edict, resolve_directives, write_dec
 from ming_sim.issues import bind_content as _bind_issues
 from ming_sim.llm_model import create_agno_db, extract_agent_text, verify_llm_available
 from ming_sim.models import Character, CourtContext, GameState, LLMConfig
+from ming_sim.paths import user_data_path
 from ming_sim.registry import MinisterRegistry, bind_content as _bind_registry
 from ming_sim.skills import bind_content as _bind_skills
+
+
+AUTO_SAVE_PREFIX = "auto_"
+AUTO_SAVE_KEEP_TURNS = 3  # 保留最近 N 个 turn 的全部自动存档（每 turn 含 begin + preresolve）
 
 
 class TurnPhase(str, Enum):
@@ -283,6 +288,7 @@ class GameSession:
             self.state.turn_phase = TurnPhase.SUMMONING.value
             self.db.save_state(self.state)
         self._begun = True
+        self.auto_save("begin")
         return self.turn_snapshot()
 
     def current_phase(self) -> TurnPhase:
@@ -452,6 +458,8 @@ class GameSession:
         directives = self.db.list_directives(self.state, statuses=("draft",))
         if not directives:
             raise ValueError("网页/CLI 端不允许跳过回合：至少一条草案才能颁诏。")
+        # 结算前先存一份：LLM 推演有可能崩，留个回滚锚点
+        self.auto_save("preresolve")
         decree_text = decree or self.last_decree or write_decree_with_agno(
             self.llm_config, self.agno_db, self.state, directives
         )
@@ -475,6 +483,44 @@ class GameSession:
 
     def victory(self) -> Dict[str, object]:
         return victory_status(self.db, self.state)
+
+    def auto_save(self, tag: str) -> Optional[str]:
+        """每回合 begin/end 自动热备一份。保留最近 AUTO_SAVE_KEEP 份，旧的删。
+        文件名 auto_<year>_<period>_<turn>_<tag>.db；prune 只动 AUTO_SAVE_PREFIX 前缀，
+        不碰用户手动存档。失败静默（自动存档不应阻断游戏）。"""
+        try:
+            import os as _os
+            saves_dir = user_data_path("saves", "_keep")  # 确保父目录建好
+            saves_dir = _os.path.dirname(saves_dir)
+            fname = (
+                f"{AUTO_SAVE_PREFIX}{self.state.year:04d}_"
+                f"{self.state.period:02d}_t{self.state.turn:04d}_{tag}.db"
+            )
+            target = _os.path.join(saves_dir, fname)
+            self.db.backup_to(target)
+            # prune：按 turn 分组，留最近 AUTO_SAVE_KEEP_TURNS 个 turn 的所有 auto 存档。
+            # 文件名 auto_<year>_<period>_t<turn>_<tag>.db；按 _t<turn>_ 段解 turn 号。
+            import re as _re
+            buckets: Dict[int, List[str]] = {}
+            for f in _os.listdir(saves_dir):
+                if not (f.startswith(AUTO_SAVE_PREFIX) and f.endswith(".db")):
+                    continue
+                m = _re.search(r"_t(\d+)_", f)
+                if not m:
+                    continue
+                buckets.setdefault(int(m.group(1)), []).append(f)
+            keep_turns = set(sorted(buckets.keys(), reverse=True)[:AUTO_SAVE_KEEP_TURNS])
+            for turn_num, files in buckets.items():
+                if turn_num in keep_turns:
+                    continue
+                for stale in files:
+                    try:
+                        _os.remove(_os.path.join(saves_dir, stale))
+                    except OSError:
+                        pass
+            return target
+        except Exception:
+            return None
 
     def close(self) -> None:
         self.db.close()

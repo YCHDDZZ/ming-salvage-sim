@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from ming_sim.constants import ROOT_DIR
+from ming_sim.paths import bundled_path, user_data_path, user_data_dir
 from ming_sim.exceptions import ExitGame, LLMUnavailable
 from ming_sim.llm_config import (
     load_llm_config,
@@ -39,9 +40,10 @@ from ming_sim.flows import calc_province_fiscal
 from ming_sim.exceptions import LLMContractError  # noqa: F401  (保留：供错误处理)
 from ming_sim.models import Character, LLMConfig, monthly_amount
 
-WEB_DIST = os.path.join(ROOT_DIR, "web", "dist")
+WEB_DIST = bundled_path("web", "dist")
 # 用户上传的自定义立绘存档级目录（不随 build 清空，git 可忽略）。
-UPLOAD_PORTRAIT_DIR = os.path.join(ROOT_DIR, "data", "uploads", "portraits")
+# frozen 模式落 ~/.ming_sim/uploads/portraits/，源码模式落 <repo>/data/uploads/portraits/。
+UPLOAD_PORTRAIT_DIR = user_data_path("uploads", "portraits")
 # 自定义立绘 portrait_id 前缀；前端据此解析到 /portraits/custom/<name>.png。
 CUSTOM_PORTRAIT_PREFIX = "custom:"
 ALLOWED_PORTRAIT_TYPES = {"image/png", "image/jpeg", "image/webp"}
@@ -65,11 +67,15 @@ class DirectivePatch(BaseModel):
 class WebGame:
     """Web 端会话包装：持一个 GameSession + 网页专属态（聊天历史、收藏）。"""
 
-    def __init__(self) -> None:
-        db_path = os.environ.get("MING_SIM_DB", "data/ming_sim.db")
-        # 相对路径锚到项目根，避免 uvicorn 工作目录不同导致连错（甚至新建空）DB。
-        if not os.path.isabs(db_path):
-            db_path = os.path.join(ROOT_DIR, db_path)
+    def __init__(self, fresh: bool = False) -> None:
+        """实例化 = 真正进入游戏。无 API key 直接抛 LLMUnavailable。
+        fresh=True：先清空主 DB（新游戏）再建 session。"""
+        db_path = os.environ.get("MING_SIM_DB", "")
+        # 默认存到用户数据目录（frozen=~/.ming_sim/ming_sim.db；源码=<repo>/data/ming_sim.db）。
+        if not db_path:
+            db_path = user_data_path("ming_sim.db")
+        elif not os.path.isabs(db_path):
+            db_path = str(user_data_dir() / db_path)
         base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
         model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
         api_key = os.environ.get("OPENAI_API_KEY", "")
@@ -78,10 +84,20 @@ class WebGame:
         base_url = runtime.get("base_url") or base_url
         model = runtime.get("model") or model
         api_key = runtime.get("api_key") or api_key
+        if not api_key:
+            raise LLMUnavailable("未配 API key，请先到设置页填写。")
         random.seed(int(os.environ.get("MING_SIM_SEED", "7")))
         os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
         self.db_path = db_path
-        llm_config = load_llm_config(base_url, model, api_key)
+        if fresh:
+            for suffix in ("", "-wal", "-shm"):
+                target = db_path + suffix
+                if os.path.isfile(target):
+                    try:
+                        os.remove(target)
+                    except OSError:
+                        pass
+        llm_config = LLMConfig(api_key=api_key, base_url=normalize_openai_base_url(base_url), model=model)
         self.session = GameSession(db_path, llm_config)
         self.session.begin_turn()
         # 召对记录持久化在 chat_messages 表，启动时恢复进内存缓存。
@@ -94,9 +110,7 @@ class WebGame:
 
     # ── 存档管理 ─────────────────────────────────────────────────────────
     def saves_dir(self) -> str:
-        path = os.path.join(ROOT_DIR, "data", "saves")
-        os.makedirs(path, exist_ok=True)
-        return path
+        return user_data_path("saves")
 
     def list_saves(self) -> List[Dict[str, Any]]:
         out: List[Dict[str, Any]] = []
@@ -651,8 +665,164 @@ def sse_event(event: str, data: Dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-web_game = WebGame()
+web_game: Optional[WebGame] = None  # 懒加载：菜单页点「新游戏/继续/加载存档」才实例化
 app = FastAPI(title="Ming Salvage MVP Web")
+
+
+def get_game() -> WebGame:
+    """游戏路由统一入口。未开局 → 409 让前端跳回菜单页。"""
+    if web_game is None:
+        raise HTTPException(status_code=409, detail="尚未开局，请回菜单选择新游戏/继续/加载存档。")
+    return web_game
+
+
+def _scan_saves() -> List[Dict[str, Any]]:
+    """扫存档目录，独立于 WebGame 实例（菜单页无 game 也要能列）。"""
+    saves_dir = user_data_path("saves")
+    out: List[Dict[str, Any]] = []
+    if not os.path.isdir(saves_dir):
+        return out
+    for fname in sorted(os.listdir(saves_dir)):
+        if not fname.endswith(".db"):
+            continue
+        full = os.path.join(saves_dir, fname)
+        try:
+            st = os.stat(full)
+        except OSError:
+            continue
+        out.append({
+            "name": fname[:-3],
+            "size": st.st_size,
+            "mtime": int(st.st_mtime),
+        })
+    out.sort(key=lambda x: x["mtime"], reverse=True)
+    return out
+
+
+def _has_main_db() -> bool:
+    """主 DB 文件是否存在 → 决定「继续」按钮可不可点。"""
+    db_path = os.environ.get("MING_SIM_DB", "") or user_data_path("ming_sim.db")
+    if not os.path.isabs(db_path):
+        db_path = str(user_data_dir() / db_path)
+    return os.path.isfile(db_path)
+
+
+@app.get("/api/menu/status")
+async def api_menu_status() -> Dict[str, Any]:
+    """菜单页状态：API key 是否配好、上次主 DB 是否存在、存档列表。"""
+    runtime = load_runtime_llm()
+    has_api_key = bool(runtime.get("api_key") or os.environ.get("OPENAI_API_KEY"))
+    return {
+        "has_api_key": has_api_key,
+        "has_running_game": web_game is not None,
+        "has_main_db": _has_main_db(),
+        "saves": _scan_saves(),
+        "llm": {
+            "base_url": runtime.get("base_url") or os.environ.get("OPENAI_BASE_URL", ""),
+            "model": runtime.get("model") or os.environ.get("OPENAI_MODEL", ""),
+            "has_api_key": has_api_key,
+        },
+    }
+
+
+@app.post("/api/menu/new_game")
+async def api_menu_new_game() -> Dict[str, Any]:
+    """开始新游戏：清主 DB → 新建 WebGame。"""
+    global web_game
+    if web_game is not None:
+        try:
+            web_game.session.close()
+        except Exception:
+            pass
+        web_game = None
+    try:
+        web_game = WebGame(fresh=True)
+    except LLMUnavailable as exc:
+        raise HTTPException(status_code=412, detail=str(exc))
+    return {"state": web_game.state_payload()}
+
+
+@app.post("/api/menu/continue")
+async def api_menu_continue() -> Dict[str, Any]:
+    """继续：用上次主 DB 启动 WebGame。"""
+    global web_game
+    if not _has_main_db():
+        raise HTTPException(status_code=404, detail="无上次进度可继续，请先新游戏或加载存档。")
+    try:
+        web_game = WebGame(fresh=False)
+    except LLMUnavailable as exc:
+        raise HTTPException(status_code=412, detail=str(exc))
+    return {"state": web_game.state_payload()}
+
+
+@app.post("/api/menu/load_save/{name}")
+async def api_menu_load_save(name: str) -> Dict[str, Any]:
+    """从存档启动：先启动空 WebGame（fresh）→ 调 load_save 热替换主 DB。"""
+    global web_game
+    try:
+        web_game = WebGame(fresh=False)  # 先有 session 才能 load_save
+    except LLMUnavailable as exc:
+        raise HTTPException(status_code=412, detail=str(exc))
+    web_game.load_save(name)
+    return {"state": web_game.state_payload()}
+
+
+@app.post("/api/menu/exit_to_menu")
+async def api_menu_exit() -> Dict[str, Any]:
+    """退回菜单：关 session 但不删 DB。"""
+    global web_game
+    if web_game is not None:
+        try:
+            web_game.session.close()
+        except Exception:
+            pass
+        web_game = None
+    return {"ok": True}
+
+
+@app.post("/api/menu/shutdown")
+async def api_menu_shutdown() -> Dict[str, Any]:
+    """退出整个游戏：关 session + 终止服务进程。前端收响应后自行关页面。"""
+    import os as _os
+    import signal as _signal
+    import threading as _threading
+    global web_game
+    if web_game is not None:
+        try:
+            web_game.session.close()
+        except Exception:
+            pass
+        web_game = None
+    # 先返回响应，再异步终止进程。SIGTERM 在 *nix 走优雅退出；
+    # Windows 无完整 SIGTERM 语义（pywebview 主线程也不收信号），直接 os._exit 兜底。
+    def _kill_later() -> None:
+        import sys as _sys
+        import time as _time
+        _time.sleep(0.3)
+        if _sys.platform == "win32":
+            _os._exit(0)
+        else:
+            _os.kill(_os.getpid(), _signal.SIGTERM)
+    _threading.Thread(target=_kill_later, daemon=True).start()
+    return {"ok": True}
+
+
+class LlmSetupRequest(BaseModel):
+    base_url: str
+    model: str
+    api_key: str
+
+
+@app.post("/api/menu/llm")
+async def api_menu_save_llm(request: LlmSetupRequest) -> Dict[str, Any]:
+    """菜单页保存 LLM 配置：仅落盘 runtime_llm.json，不建 session（轻校验：非空即可）。"""
+    base_url = (request.base_url or "").strip()
+    model = (request.model or "").strip()
+    api_key = (request.api_key or "").strip()
+    if not (base_url and model and api_key):
+        raise HTTPException(status_code=400, detail="base_url / model / api_key 不能为空。")
+    save_runtime_llm(normalize_openai_base_url(base_url), model, api_key)
+    return {"ok": True, "llm": {"base_url": normalize_openai_base_url(base_url), "model": model, "has_api_key": True}}
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -664,15 +834,15 @@ app.add_middleware(
 
 @app.get("/api/game/state")
 async def api_state() -> Dict[str, Any]:
-    return web_game.state_payload()
+    return get_game().state_payload()
 
 
 @app.get("/api/turn_extraction")
 async def api_turn_extraction(turn: int = -1) -> Dict[str, Any]:
     """读 turn_extractions：默认上一回合（state.turn-1，因 resolve 已 next_period）。"""
     if turn < 0:
-        turn = max(1, int(web_game.state.turn) - 1)
-    data = web_game.db.get_turn_extraction(turn)
+        turn = max(1, int(get_game().state.turn) - 1)
+    data = get_game().db.get_turn_extraction(turn)
     if data is None:
         return {"turn": turn, "exists": False}
     data["exists"] = True
@@ -682,13 +852,13 @@ async def api_turn_extraction(turn: int = -1) -> Dict[str, Any]:
 @app.get("/api/history/turns")
 async def api_history_turns() -> Dict[str, Any]:
     """已存档回合列表（turn_reports / turn_extractions / 已颁诏 turn_directives 并集）。"""
-    return {"turns": web_game.db.list_archived_turns()}
+    return {"turns": get_game().db.list_archived_turns()}
 
 
 @app.get("/api/history/turn/{turn}")
 async def api_history_turn(turn: int) -> Dict[str, Any]:
     """某回合历史聚合：邸报奏报 + 诏书 + 已颁草案 + extractor 输入/输出。"""
-    db = web_game.db
+    db = get_game().db
     report = db.get_turn_report(turn)
     extraction = db.get_turn_extraction(turn)
     directives = db.list_directives_by_turn(turn)
@@ -712,22 +882,22 @@ async def api_history_turn(turn: int) -> Dict[str, Any]:
 
 @app.get("/api/map")
 async def api_map() -> Dict[str, Any]:
-    return {"nodes": web_game.map_nodes()}
+    return {"nodes": get_game().map_nodes()}
 
 
 @app.get("/api/buildings")
 async def api_buildings(region_id: str = "") -> Dict[str, Any]:
-    return {"buildings": web_game.db.building_payload(region_id)}
+    return {"buildings": get_game().db.building_payload(region_id)}
 
 
 @app.get("/api/ministers")
 async def api_ministers(group: str = "全部", kind: str = "court") -> Dict[str, Any]:
     is_harem = kind == "harem"
     ministers = [
-        web_game.public_character(c)
-        for c in web_game.content.characters.values()
+        get_game().public_character(c)
+        for c in get_game().content.characters.values()
         if (c.office_type == "后宫") == is_harem
-        and web_game.db.get_character_status(c.name)[0] == "active"
+        and get_game().db.get_character_status(c.name)[0] == "active"
     ]
     if not is_harem:
         if group == "内阁":
@@ -735,22 +905,22 @@ async def api_ministers(group: str = "全部", kind: str = "court") -> Dict[str,
         elif group == "六部":
             ministers = [m for m in ministers if m["office_type"] in {"吏部", "户部", "礼部", "兵部", "刑部", "工部"}]
     if group == "收藏":
-        ministers = [m for m in ministers if m["name"] in web_game.favorites]
+        ministers = [m for m in ministers if m["name"] in get_game().favorites]
     return {"group": group, "ministers": ministers}
 
 
 @app.post("/api/favorites/{minister_name}")
 async def api_add_favorite(minister_name: str) -> Dict[str, Any]:
-    if minister_name not in web_game.content.characters:
+    if minister_name not in get_game().content.characters:
         raise HTTPException(status_code=404, detail=f"未找到：{minister_name}")
-    web_game.favorites.add(minister_name)
-    return {"favorites": sorted(web_game.favorites)}
+    get_game().favorites.add(minister_name)
+    return {"favorites": sorted(get_game().favorites)}
 
 
 @app.delete("/api/favorites/{minister_name}")
 async def api_remove_favorite(minister_name: str) -> Dict[str, Any]:
-    web_game.favorites.discard(minister_name)
-    return {"favorites": sorted(web_game.favorites)}
+    get_game().favorites.discard(minister_name)
+    return {"favorites": sorted(get_game().favorites)}
 
 
 _STATUS_LABEL_WEB = {
@@ -760,9 +930,9 @@ _STATUS_LABEL_WEB = {
 
 
 def _require_active_minister(minister_name: str) -> None:
-    if minister_name not in web_game.content.characters:
+    if minister_name not in get_game().content.characters:
         raise HTTPException(status_code=404, detail=f"未找到人物：{minister_name}")
-    status, reason = web_game.db.get_character_status(minister_name)
+    status, reason = get_game().db.get_character_status(minister_name)
     if status != "active":
         label = _STATUS_LABEL_WEB.get(status, status)
         detail = f"{minister_name}已{label}，无法召见。" + (reason or "")
@@ -772,25 +942,25 @@ def _require_active_minister(minister_name: str) -> None:
 @app.get("/api/ministers/{minister_name}/chat")
 async def api_chat_history(minister_name: str) -> Dict[str, Any]:
     _require_active_minister(minister_name)
-    character = web_game.content.characters[minister_name]
+    character = get_game().content.characters[minister_name]
     return {
-        "minister": web_game.public_character(character),
-        "history": web_game.chat_history.get(minister_name, []),
-        "suggestions": web_game.suggestions_for(character),
+        "minister": get_game().public_character(character),
+        "history": get_game().chat_history.get(minister_name, []),
+        "suggestions": get_game().suggestions_for(character),
     }
 
 
 @app.post("/api/ministers/{minister_name}/chat")
 async def api_chat(minister_name: str, request: ChatRequest) -> Dict[str, Any]:
     _require_active_minister(minister_name)
-    return web_game.chat(minister_name, request.message)
+    return get_game().chat(minister_name, request.message)
 
 
 @app.post("/api/ministers/{minister_name}/chat/stream")
 async def api_chat_stream(minister_name: str, request: ChatRequest) -> StreamingResponse:
     _require_active_minister(minister_name)
     async def generate() -> AsyncIterator[str]:
-        for item in web_game.chat_stream(minister_name, request.message):
+        for item in get_game().chat_stream(minister_name, request.message):
             item_type = str(item.get("type", "message"))
             if item_type == "delta":
                 yield sse_event("delta", {"content": item.get("content", "")})
@@ -807,56 +977,56 @@ async def api_chat_stream(minister_name: str, request: ChatRequest) -> Streaming
 async def api_create_directive(request: DirectiveRequest) -> Dict[str, Any]:
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="指令内容不能为空。")
-    dv = web_game.session.add_directive(request.text.strip(), notes=request.notes)
+    dv = get_game().session.add_directive(request.text.strip(), notes=request.notes)
     return {
         "directive": {"id": dv.id, "text": dv.text, "status": dv.status},
-        "directives": [web_game.directive_payload(item) for item in web_game.directive_rows()],
+        "directives": [get_game().directive_payload(item) for item in get_game().directive_rows()],
     }
 
 
 @app.patch("/api/directives/{directive_id}")
 async def api_update_directive(directive_id: int, request: DirectivePatch) -> Dict[str, Any]:
-    rows = web_game.directive_rows()
+    rows = get_game().directive_rows()
     row = next((item for item in rows if int(item["id"]) == directive_id), None)
     if row is None:
         raise HTTPException(status_code=404, detail="未找到草案。")
     text = request.text if request.text is not None else str(row["text"])
     if not text.strip():
         raise HTTPException(status_code=400, detail="指令内容不能为空。")
-    web_game.session.update_directive(directive_id, text.strip())
-    return {"directives": [web_game.directive_payload(item) for item in web_game.directive_rows()]}
+    get_game().session.update_directive(directive_id, text.strip())
+    return {"directives": [get_game().directive_payload(item) for item in get_game().directive_rows()]}
 
 
 @app.delete("/api/directives/{directive_id}")
 async def api_delete_directive(directive_id: int) -> Dict[str, Any]:
-    web_game.session.delete_directive(directive_id)
-    return {"directives": [web_game.directive_payload(item) for item in web_game.directive_rows()]}
+    get_game().session.delete_directive(directive_id)
+    return {"directives": [get_game().directive_payload(item) for item in get_game().directive_rows()]}
 
 
 @app.post("/api/directives/{directive_id}/confirm")
 async def api_confirm_directive(directive_id: int) -> Dict[str, Any]:
     """大臣拟旨经皇帝核定：pending → draft。"""
-    web_game.session.confirm_directive(directive_id)
+    get_game().session.confirm_directive(directive_id)
     return {
-        "directives": [web_game.directive_payload(item) for item in web_game.directive_rows()],
-        "pending_count": web_game.session.pending_count(),
+        "directives": [get_game().directive_payload(item) for item in get_game().directive_rows()],
+        "pending_count": get_game().session.pending_count(),
     }
 
 
 @app.post("/api/directives/{directive_id}/reject")
 async def api_reject_directive(directive_id: int) -> Dict[str, Any]:
     """皇帝驳回大臣拟旨：pending → rejected。"""
-    web_game.session.reject_directive(directive_id)
+    get_game().session.reject_directive(directive_id)
     return {
-        "directives": [web_game.directive_payload(item) for item in web_game.directive_rows()],
-        "pending_count": web_game.session.pending_count(),
+        "directives": [get_game().directive_payload(item) for item in get_game().directive_rows()],
+        "pending_count": get_game().session.pending_count(),
     }
 
 
 @app.post("/api/decree/write")
 async def api_write_decree() -> Dict[str, Any]:
     try:
-        decree = web_game.session.write_decree()
+        decree = get_game().session.write_decree()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
     return {"decree": decree}
@@ -866,12 +1036,12 @@ async def api_write_decree() -> Dict[str, Any]:
 async def api_issue_decree() -> Dict[str, Any]:
     """非流式颁诏（保留兼容）。前端默认走 /api/decree/issue/stream。"""
     try:
-        report = web_game.session.resolve_turn()
+        report = get_game().session.resolve_turn()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
-    decree = web_game.session.last_decree
-    web_game.refresh_turn()
-    return {"decree": decree, "report": report, "state": web_game.state_payload()}
+    decree = get_game().session.last_decree
+    get_game().refresh_turn()
+    return {"decree": decree, "report": report, "state": get_game().state_payload()}
 
 
 @app.post("/api/decree/issue/stream")
@@ -889,13 +1059,13 @@ async def api_issue_decree_stream() -> StreamingResponse:
 
     def worker() -> None:
         try:
-            report = web_game.session.resolve_turn(on_event=on_event)
-            decree = web_game.session.last_decree
-            web_game.refresh_turn()
+            report = get_game().session.resolve_turn(on_event=on_event)
+            decree = get_game().session.last_decree
+            get_game().refresh_turn()
             ev_queue.put(("__done__", {
                 "decree": decree,
                 "report": report,
-                "state": web_game.state_payload(),
+                "state": get_game().state_payload(),
             }))
         except ValueError as e:
             ev_queue.put(("__error__", str(e)))
@@ -934,8 +1104,8 @@ class LLMConfigRequest(BaseModel):
 async def api_consort_candidates() -> Dict[str, Any]:
     """返回 status=candidate 的待选秀女，供选妃事件展示。"""
     candidates = [
-        web_game.public_character(c)
-        for c in web_game.content.characters.values()
+        get_game().public_character(c)
+        for c in get_game().content.characters.values()
         if c.office_type == "后宫" and c.status == "candidate"
     ]
     return {"candidates": candidates}
@@ -944,7 +1114,7 @@ async def api_consort_candidates() -> Dict[str, Any]:
 @app.post("/api/consorts/{name}/select")
 async def api_select_consort(name: str) -> Dict[str, Any]:
     """皇帝选中某秀女，转 active 并赋予初始位份。"""
-    consort = web_game.content.characters.get(name)
+    consort = get_game().content.characters.get(name)
     if consort is None or consort.office_type != "后宫":
         raise HTTPException(status_code=404, detail=f"未找到候选秀女：{name}")
     if consort.status != "candidate":
@@ -953,45 +1123,45 @@ async def api_select_consort(name: str) -> Dict[str, Any]:
     consort.status = "active"
     consort.office = "嫔"  # 初始位份：嫔
     # 同步进 registry（新增 agent）
-    web_game.session.registry.register(consort)
-    web_game.chat_history.setdefault(name, [])
-    return {"selected": web_game.public_character(consort)}
+    get_game().session.registry.register(consort)
+    get_game().chat_history.setdefault(name, [])
+    return {"selected": get_game().public_character(consort)}
 
 
 @app.get("/api/saves")
 async def api_list_saves() -> Dict[str, Any]:
-    return {"saves": web_game.list_saves()}
+    return {"saves": get_game().list_saves()}
 
 
 @app.post("/api/saves")
 async def api_create_save(request: SaveCreateRequest) -> Dict[str, Any]:
-    info = web_game.save_to(request.name)
-    return {"save": info, "saves": web_game.list_saves()}
+    info = get_game().save_to(request.name)
+    return {"save": info, "saves": get_game().list_saves()}
 
 
 @app.delete("/api/saves/{name}")
 async def api_delete_save(name: str) -> Dict[str, Any]:
-    web_game.delete_save(name)
-    return {"saves": web_game.list_saves()}
+    get_game().delete_save(name)
+    return {"saves": get_game().list_saves()}
 
 
 @app.post("/api/saves/{name}/load")
 async def api_load_save(name: str) -> Dict[str, Any]:
-    web_game.load_save(name)
-    return {"state": web_game.state_payload()}
+    get_game().load_save(name)
+    return {"state": get_game().state_payload()}
 
 
 @app.post("/api/game/reset")
 async def api_reset_game() -> Dict[str, Any]:
     """清空主 DB 重开新局。存档目录保留。"""
-    web_game.reset_game()
-    return {"state": web_game.state_payload()}
+    get_game().reset_game()
+    return {"state": get_game().state_payload()}
 
 
 @app.get("/api/llm/config")
 async def api_get_llm_config() -> Dict[str, Any]:
     """读当前生效的 LLM 配置。api_key 不回传明文，只回是否已设置。"""
-    cfg = web_game.session.llm_config
+    cfg = get_game().session.llm_config
     saved = load_runtime_llm()
     return {
         "base_url": cfg.base_url,
@@ -1008,7 +1178,7 @@ async def api_get_llm_config() -> Dict[str, Any]:
 @app.post("/api/llm/config")
 async def api_set_llm_config(request: LLMConfigRequest) -> Dict[str, Any]:
     try:
-        cfg = web_game.apply_llm_config(request.base_url, request.model, request.api_key)
+        cfg = get_game().apply_llm_config(request.base_url, request.model, request.api_key)
     except LLMUnavailable as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
     except Exception as e:  # noqa: BLE001
@@ -1033,7 +1203,7 @@ def _find_portrait_file(name: str) -> Optional[str]:
 @app.post("/api/consorts/{name}/portrait")
 async def api_upload_portrait(name: str, file: UploadFile = File(...)) -> Dict[str, Any]:
     # 只接受已存在的人物名 → 集合固定，杜绝路径穿越/任意写。
-    character = web_game.find_character(name)
+    character = get_game().find_character(name)
     if character is None:
         raise HTTPException(status_code=404, detail="未找到该人物")
     ext = _PORTRAIT_EXT.get(file.content_type or "")
@@ -1051,20 +1221,20 @@ async def api_upload_portrait(name: str, file: UploadFile = File(...)) -> Dict[s
         os.remove(old)
     with open(os.path.join(UPLOAD_PORTRAIT_DIR, f"{name}.{ext}"), "wb") as fh:
         fh.write(data)
-    web_game.set_custom_portrait(name, f"{CUSTOM_PORTRAIT_PREFIX}{name}")
+    get_game().set_custom_portrait(name, f"{CUSTOM_PORTRAIT_PREFIX}{name}")
     return {"name": name, "portrait_id": f"{CUSTOM_PORTRAIT_PREFIX}{name}"}
 
 
 @app.delete("/api/consorts/{name}/portrait")
 async def api_delete_portrait(name: str) -> Dict[str, Any]:
-    character = web_game.find_character(name)
+    character = get_game().find_character(name)
     if character is None:
         raise HTTPException(status_code=404, detail="未找到该人物")
     old = _find_portrait_file(name)
     if old is not None:
         os.remove(old)
     # 复位 portrait_id：清空 → 前端回落到池图（add/seed 时会按 office_type 再分配）。
-    web_game.set_custom_portrait(name, "")
+    get_game().set_custom_portrait(name, "")
     return {"name": name, "portrait_id": ""}
 
 

@@ -906,7 +906,8 @@ class GameDB:
         if exists is not None:
             return
         from pathlib import Path
-        gazette_path = Path(__file__).resolve().parent.parent / "content" / "opening_gazette.md"
+        from ming_sim.paths import bundled_path
+        gazette_path = Path(bundled_path("content", "opening_gazette.md"))
         if not gazette_path.is_file():
             return
         text = gazette_path.read_text(encoding="utf-8").strip()
@@ -1088,9 +1089,10 @@ class GameDB:
                 used.add(int(r["portrait_id"].replace(prefix, "")))
             except ValueError:
                 pass
-        # 扫真实存在的图编号
+        # 扫真实存在的图编号（frozen 模式走 _MEIPASS，源码走 <repo>/web/public/portraits）
         from pathlib import Path
-        portraits_dir = Path(__file__).resolve().parent.parent / "web" / "public" / "portraits"
+        from ming_sim.paths import bundled_path
+        portraits_dir = Path(bundled_path("web", "public", "portraits"))
         available: set[int] = set()
         if portraits_dir.is_dir():
             for p in portraits_dir.glob(f"{prefix}*.png"):

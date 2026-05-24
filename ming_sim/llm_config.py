@@ -7,10 +7,10 @@ import json
 import os
 from typing import Dict, Optional
 
-from ming_sim.constants import ROOT_DIR
 from ming_sim.models import LLMConfig
+from ming_sim.paths import user_data_path
 
-RUNTIME_LLM_PATH = os.path.join(ROOT_DIR, "data", "runtime_llm.json")
+RUNTIME_LLM_PATH = user_data_path("runtime_llm.json")
 
 
 def normalize_openai_base_url(base_url: str) -> str:
