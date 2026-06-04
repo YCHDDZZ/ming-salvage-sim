@@ -213,6 +213,32 @@ class OpeningLegacy:
 
 
 @dataclass
+class PresetDepartment:
+    """可由皇帝诏书新设的预设衙门：立项结案后落 offices 表。modifiers 非空者挂永久 legacy。
+    见 content/preset_departments.json。表外自创部门不走此池、无 modifiers。"""
+    key: str
+    name: str
+    category: str
+    authority_scope: str
+    power: int
+    responsibility: int
+    corruption_risk: int
+    effect_summary: str
+    modifiers: Dict[str, object]
+
+
+@dataclass
+class PresetTechnology:
+    """可由皇帝诏书推动的预设科技：研发结案后落 technologies 表（无月度产出）。
+    modifiers 非空者挂永久 legacy。见 content/preset_technologies.json。"""
+    key: str
+    name: str
+    category: str
+    effect_summary: str
+    modifiers: Dict[str, object]
+
+
+@dataclass
 class GameState:
     year: int = 1627
     period: int = 10

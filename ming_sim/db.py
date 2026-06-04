@@ -327,6 +327,17 @@ class GameDB:
                 FOREIGN KEY(building_id) REFERENCES buildings(id)
             );
 
+            CREATE TABLE IF NOT EXISTS technologies (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                category TEXT NOT NULL,
+                effect_summary TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT '',
+                origin TEXT NOT NULL DEFAULT 'issue',
+                created_turn INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS economy_accounts (
                 account TEXT PRIMARY KEY,
                 metric_key TEXT NOT NULL UNIQUE,
@@ -753,6 +764,8 @@ class GameDB:
         # 开局负面帝国修正：clear_gate(机器消除条件)、legacy_key(对应 opening_legacies.key，开局修正去重用)
         self.ensure_column("legacies", "clear_gate", "TEXT NOT NULL DEFAULT '{}'")
         self.ensure_column("legacies", "legacy_key", "TEXT NOT NULL DEFAULT ''")
+        # 部门来源：preset(开局六部内阁) vs issue(玩家诏书新设衙门)，吏部抽屉/payload 区分用。
+        self.ensure_column("offices", "origin", "TEXT NOT NULL DEFAULT 'preset'")
         # 章节记忆正文：event_type='chapter_summary' 用，存整段叙事章节（不受 outcome 80 字限）。
         self.ensure_column("event_memories", "body", "TEXT NOT NULL DEFAULT ''")
         # 后宫调教记录
@@ -3034,6 +3047,98 @@ class GameDB:
         self.conn.execute("DELETE FROM buildings WHERE id = ?", (building_id,))
         self.conn.commit()
         return True
+
+    # ── 科技实体（technologies）─────────────────────────────────────────────
+    # 科技无月度产出：表只作「已解锁科技清单」展示+查重，研发进度由其 issue 的 bar 承载，
+    # 结案才落一行（=已解锁）。一次性数值走 issue effect_on_resolve；预设科技额外挂永久 legacy。
+
+    def add_technology(
+        self, state: GameState, name: str, category: str, *,
+        effect_summary: str = "", status: str = "", origin: str = "issue",
+    ) -> str:
+        """解锁科技：落 technologies 一行。同名已存在则直接返回旧 id（查重，不重复落）。"""
+        nm = name.strip()[:60] or "无名科技"
+        existing = self.conn.execute("SELECT id FROM technologies WHERE name = ?", (nm,)).fetchone()
+        if existing is not None:
+            return str(existing["id"])
+        seq = self.conn.execute("SELECT COUNT(*) FROM technologies").fetchone()[0]
+        tech_id = f"tech_{int(seq) + 1}"
+        while self.conn.execute("SELECT 1 FROM technologies WHERE id = ?", (tech_id,)).fetchone():
+            seq += 1
+            tech_id = f"tech_{int(seq) + 1}"
+        self.conn.execute(
+            """
+            INSERT INTO technologies (id, name, category, effect_summary, status, origin, created_turn)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (tech_id, nm, category.strip()[:20] or "科技",
+             effect_summary.strip()[:160], status.strip()[:160] or "已解锁。",
+             origin, state.turn),
+        )
+        self.conn.commit()
+        return tech_id
+
+    def technology_payload(self) -> List[Dict[str, object]]:
+        """已解锁科技清单，供 simulator/extractor/web。"""
+        rows = self.conn.execute(
+            "SELECT id, name, category, effect_summary, status, origin FROM technologies ORDER BY created_turn, id"
+        ).fetchall()
+        return [
+            {
+                "id": str(r["id"]), "name": str(r["name"]), "category": str(r["category"]),
+                "effect_summary": str(r["effect_summary"]), "status": str(r["status"]),
+                "origin": str(r["origin"]),
+            }
+            for r in rows
+        ]
+
+    # ── 部门（复用 offices 表插行）──────────────────────────────────────────
+    # 新设衙门 office_type 唯一；可被 characters.office_type 引用、可派大臣（默认 _base skill）。
+    # 预设衙门额外挂永久 legacy（见 issues._apply_issue_departments）。
+
+    def add_department(
+        self, name: str, *, skills: Optional[List[str]] = None, tools: Optional[List[str]] = None,
+        authority_scope: str = "", power: int = 50, responsibility: int = 50,
+        corruption_risk: int = 30, origin: str = "issue",
+    ) -> str:
+        """新设衙门：往 offices 插一行（office_type=部门名）。已存在则跳过、返回原名。"""
+        office_type = name.strip()[:40]
+        if not office_type:
+            raise ValueError("add_department: 部门名为空")
+        if self.conn.execute("SELECT 1 FROM offices WHERE office_type = ?", (office_type,)).fetchone():
+            return office_type  # 已存在，查重跳过
+        self.conn.execute(
+            """
+            INSERT INTO offices
+            (office_type, skills, tools, authority_scope, power, responsibility, corruption_risk, origin)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (office_type,
+             json.dumps(skills or [], ensure_ascii=False),
+             json.dumps(tools or [], ensure_ascii=False),
+             authority_scope.strip()[:200],
+             max(0, min(100, int(power))),
+             max(0, min(100, int(responsibility))),
+             max(0, min(100, int(corruption_risk))),
+             origin),
+        )
+        self.conn.commit()
+        return office_type
+
+    def department_payload(self) -> List[Dict[str, object]]:
+        """玩家新设衙门清单（origin='issue'），供 simulator/extractor。预设六部内阁不重复喂。"""
+        rows = self.conn.execute(
+            "SELECT office_type, authority_scope, power, responsibility, corruption_risk "
+            "FROM offices WHERE origin = 'issue' ORDER BY office_type"
+        ).fetchall()
+        return [
+            {
+                "name": str(r["office_type"]), "authority_scope": str(r["authority_scope"]),
+                "power": int(r["power"]), "responsibility": int(r["responsibility"]),
+                "corruption_risk": int(r["corruption_risk"]),
+            }
+            for r in rows
+        ]
 
     def apply_building_deltas(
         self,

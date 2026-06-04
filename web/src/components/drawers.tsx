@@ -460,6 +460,8 @@ export function EconomyDrawer({
   const [tab, setTab] = React.useState<"国库" | "内库">("国库");
   const [q, setQ] = React.useState("");
   const budget = state.budget[tab];
+  const modifierPct = budget.modifier_pct || 0;
+  const hasModifier = modifierPct !== 0 && budget.base_net !== undefined;
   const matchItem = (name: string) => !q || name.includes(q);
   return (
     <RightDrawer open={open} onClose={onClose} title="经济" icon={<ScrollText size={17} />} extraClass="right-drawer-economy">
@@ -476,6 +478,11 @@ export function EconomyDrawer({
         <span className={budget.net >= 0 ? "income" : "expense"}>
           月净 <b>{formatSignedMoney(budget.net)}</b>
         </span>
+        {hasModifier && (
+          <span className="budget-base-note">
+            基准 {formatSignedMoney(budget.base_net || 0)} / 修正 {modifierPct > 0 ? "+" : ""}{modifierPct}%
+          </span>
+        )}
       </div>
       <div className="right-drawer-list">
         <div className="right-drawer-section-title">固定收入</div>
@@ -520,7 +527,15 @@ export function AppointmentDrawer({
   onClose: () => void;
 }) {
   const [q, setQ] = React.useState("");
-  const offices = ["内阁", "吏部", "户部", "礼部", "兵部", "刑部", "工部"];
+  const BASE_OFFICES = ["内阁", "吏部", "户部", "礼部", "兵部", "刑部", "工部"];
+  // 新设衙门（军机处/财政部等）：从在职大臣的 office_type 动态收集，排在基础六部之后、「其他」之前。
+  const extraOffices = [...new Set(
+    ministers
+      .filter((m) => (m.power_id || "ming") === "ming" && m.status === "active")
+      .map((m) => (m.office_type || "").trim())
+      .filter((t) => t && t !== "后宫" && !BASE_OFFICES.includes(t))
+  )];
+  const offices = [...BASE_OFFICES, ...extraOffices];
   const byOffice = new Map<string, Minister[]>();
   for (const office of offices) byOffice.set(office, []);
   byOffice.set("其他", []);
@@ -528,7 +543,9 @@ export function AppointmentDrawer({
     if ((m.power_id || "ming") !== "ming") continue;
     if (m.status !== "active") continue;
     if (q && !m.name.includes(q) && !(m.office || "").includes(q) && !(m.office_type || "").includes(q)) continue;
-    const matched = offices.find((o) => (m.office_type || "").includes(o));
+    // 先精确匹配 office_type（新设衙门名完整），再回退包含匹配（基础六部容旧标签变体）
+    const exact = offices.find((o) => (m.office_type || "").trim() === o);
+    const matched = exact || BASE_OFFICES.find((o) => (m.office_type || "").includes(o));
     const key = matched || "其他";
     byOffice.get(key)!.push(m);
   }
@@ -687,4 +704,3 @@ export function HaremDrawer({
     </>
   );
 }
-

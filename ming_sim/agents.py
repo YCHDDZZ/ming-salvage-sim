@@ -358,7 +358,7 @@ def build_simulator_context(simulator_payload: Optional[Dict[str, object]]) -> s
         )
 
     # 盘面表（{cols,rows}）转 TSV，按「稳→变」排序置前；缺失/非表的跳过。
-    table_order = ("buildings", "court_roster", "armies", "regions")
+    table_order = ("buildings", "departments", "technologies", "court_roster", "armies", "regions")
     tsv_blocks: List[str] = []
     consumed: set[str] = set()
     for name in table_order:

@@ -74,6 +74,7 @@ ITEM_FIELD_ALIASES = {
     "origin_kind": "origin_kind", "来源类型": "origin_kind",
     "id": "id", "编号": "id",
     "kind": "kind", "类型": "kind",
+    "tags": "tags", "题材": "tags",
     "title": "title", "标题": "title",
     "bar_value": "bar_value", "当前进度": "bar_value",
     "expected_months": "expected_months", "预计月数": "expected_months",
@@ -87,6 +88,12 @@ ITEM_FIELD_ALIASES = {
     "economy": "economy", "钱粮": "economy",
     "factions": "factions", "派系": "factions",
     "buildings": "buildings", "建筑": "buildings",
+    "departments": "departments", "部门": "departments", "新设部门": "departments",
+    "technologies": "technologies", "科技实体": "technologies", "新解锁科技": "technologies",
+    "authority_scope": "authority_scope", "职掌": "authority_scope",
+    "responsibility": "responsibility", "职责": "responsibility",
+    "corruption_risk": "corruption_risk", "贪腐风险": "corruption_risk",
+    "effect_summary": "effect_summary", "效果摘要": "effect_summary",
     # 帝国修正（旧称遗产）子字段
     "legacy": "legacy", "帝国修正": "legacy", "遗产": "legacy",
     "duration": "duration", "时长": "duration",
@@ -287,6 +294,8 @@ def build_simulator_payload(
         "regions": _auto_table(region_rows),
         "armies": _auto_table(army_rows),
         "buildings": _auto_table(db.building_payload()),
+        "departments": _auto_table(db.department_payload()),
+        "technologies": _auto_table(db.technology_payload()),
         "court_roster": court_roster,
         "deaths_this_turn": deaths_this_turn or [],
         "debuts_this_turn": debuts_this_turn or [],
@@ -294,7 +303,7 @@ def build_simulator_payload(
         "secret_orders": secret_orders or [],
         # HITL：本回合 simulator 至少应产出的重大决策点数（全局玩法设置，0=不强制）。
         "hitl_min_decisions": _load_hitl_min_decisions(),
-        "data_note": "盘面表（buildings/court_roster/armies/regions）在本输入的开头以 TSV 文本块给出（首行列名、tab 分隔、每行一条记录），不在本 JSON 内；本 JSON 只含其余字段（含 powers_brief/factions_brief/classes_brief 叙述串、active_issues 等）。secret_orders 为皇帝密令列表，独立于 relevant_memories，每条含 id/minister_name/title/content/status/result 字段。",
+        "data_note": "盘面表（buildings/departments/technologies/court_roster/armies/regions）在本输入的开头以 TSV 文本块给出（首行列名、tab 分隔、每行一条记录），不在本 JSON 内；本 JSON 只含其余字段（含 powers_brief/factions_brief/classes_brief 叙述串、active_issues 等）。departments=已设衙门，technologies=已解锁科技（均为玩家诏书所立）；空表只有表头。secret_orders 为皇帝密令列表，独立于 relevant_memories，每条含 id/minister_name/title/content/status/result 字段。",
     }
 
 
@@ -492,6 +501,8 @@ def _extractor_context_payload(
         "regions": _auto_table(region_rows),
         "armies": _auto_table(army_rows),
         "buildings": _auto_table(db.building_payload()),
+        "departments": _auto_table(db.department_payload()),
+        "technologies": _auto_table(db.technology_payload()),
         "active_ministers": _auto_table(active_ministers),
         "offstage_ministers": _auto_table(offstage_ministers),
         "region_ids": [r["id"] for r in db.conn.execute("SELECT id FROM regions").fetchall()],
@@ -537,7 +548,7 @@ def _extractor_compat_payload(base: Dict[str, object]) -> Dict[str, object]:
 # 重复，从补充上下文里剔除，省掉约一半 extractor system 体积。
 _MODULE_DROP_FIELDS = (
     # 同名同格式，simulator_payload 已全量给出
-    "regions", "armies", "buildings", "current_state",
+    "regions", "armies", "buildings", "departments", "technologies", "current_state",
     "active_issues", "candidate_events", "decree_text",
     "relevant_memories", "secret_orders",
     # 异名但同源：simulator_payload 已有等价视图，extractor prompt（score_extractor_shared.md:17、

@@ -28,6 +28,8 @@ from ming_sim.models import (
     Faction,
     OpeningLegacy,
     Power,
+    PresetDepartment,
+    PresetTechnology,
     Region,
     SocialClass,
 )
@@ -316,6 +318,52 @@ def load_opening_legacies() -> List[OpeningLegacy]:
     return out
 
 
+def load_preset_departments() -> Dict[str, PresetDepartment]:
+    """可设衙门预设池：content/preset_departments.json。缺字段直接 SystemExit。"""
+    raw = require_dict(load_json_asset("preset_departments.json"), "preset_departments.json")
+    items = require_list(raw.get("departments"), "preset_departments.json::departments")
+    out: Dict[str, PresetDepartment] = {}
+    for idx, item in enumerate(items, 1):
+        path = f"preset_departments.json::departments[{idx}]"
+        entry = require_dict(item, path)
+        key = str_field(entry, "key", path)
+        out[key] = PresetDepartment(
+            key=key,
+            name=str_field(entry, "name", path),
+            category=str_field(entry, "category", path),
+            authority_scope=str_field(entry, "authority_scope", path),
+            power=int_field(entry, "power", path),
+            responsibility=int_field(entry, "responsibility", path),
+            corruption_risk=int_field(entry, "corruption_risk", path),
+            effect_summary=str_field(entry, "effect_summary", path),
+            modifiers=require_dict(entry.get("modifiers"), f"{path}.modifiers"),
+        )
+    if not out:
+        raise SystemExit("preset_departments.json 必须至少定义一项预设衙门。")
+    return out
+
+
+def load_preset_technologies() -> Dict[str, PresetTechnology]:
+    """可推科技预设池：content/preset_technologies.json。缺字段直接 SystemExit。"""
+    raw = require_dict(load_json_asset("preset_technologies.json"), "preset_technologies.json")
+    items = require_list(raw.get("technologies"), "preset_technologies.json::technologies")
+    out: Dict[str, PresetTechnology] = {}
+    for idx, item in enumerate(items, 1):
+        path = f"preset_technologies.json::technologies[{idx}]"
+        entry = require_dict(item, path)
+        key = str_field(entry, "key", path)
+        out[key] = PresetTechnology(
+            key=key,
+            name=str_field(entry, "name", path),
+            category=str_field(entry, "category", path),
+            effect_summary=str_field(entry, "effect_summary", path),
+            modifiers=require_dict(entry.get("modifiers"), f"{path}.modifiers"),
+        )
+    if not out:
+        raise SystemExit("preset_technologies.json 必须至少定义一项预设科技。")
+    return out
+
+
 def dict_of_string_lists(value: object, path: str) -> Dict[str, List[str]]:
     data = require_dict(value, path)
     return {str(key): string_list(item, f"{path}.{key}") for key, item in data.items()}
@@ -459,6 +507,8 @@ class GameContent:
     events: List[Event] = field(default_factory=list)
     seed_events: List[Event] = field(default_factory=list)
     opening_legacies: List[OpeningLegacy] = field(default_factory=list)
+    preset_departments: Dict[str, PresetDepartment] = field(default_factory=dict)
+    preset_technologies: Dict[str, PresetTechnology] = field(default_factory=dict)
     event_by_id: Dict[str, Event] = field(default_factory=dict)
     regions: Dict[str, Region] = field(default_factory=dict)
     armies: Dict[str, Army] = field(default_factory=dict)
@@ -500,6 +550,8 @@ class GameContent:
         events = load_event_content("events.json")
         seed_events = load_event_content("seed_events.json")
         opening_legacies = load_opening_legacies()
+        preset_departments = load_preset_departments()
+        preset_technologies = load_preset_technologies()
         regions = load_region_content()
         armies = load_army_content()
         buildings = load_building_content()
@@ -523,6 +575,8 @@ class GameContent:
             events=events,
             seed_events=seed_events,
             opening_legacies=opening_legacies,
+            preset_departments=preset_departments,
+            preset_technologies=preset_technologies,
             event_by_id={ev.id: ev for ev in (*events, *seed_events)},
             regions=regions,
             armies=armies,

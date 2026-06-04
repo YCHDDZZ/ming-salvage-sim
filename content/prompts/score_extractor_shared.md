@@ -14,7 +14,7 @@ force_json 模式下你**只能输出最终 JSON**，不得吐出思考文本。
    - **重复**：同一笔事我有没有在多个字段／多条里写了两遍？同一人同一状态、同一笔钱、同一案抄家入库，全局只落一次。
 5. **定稿**：只输出通过前四步的条目，组成本模块要求的顶层字段 JSON；无内容的字段填 `{}` 或 `[]`。
 
-**盘面读法**：基线盘面在 system 的 simulator_payload 里。其中 buildings/court_roster/armies/regions 四张表以 **TSV 文本块**给出（块头 `## 表名`，块内首行 tab 分隔列名，其后每行一条记录按列名对位、空字段为空串）；powers/factions/classes 等其余字段在「## 其余字段（JSON）」内。算 delta 一律「相对该 TSV/JSON 里的当前值」，按列名取字段，不凭叙事印象。
+**盘面读法**：基线盘面在 system 的 simulator_payload 里。其中 buildings/departments/technologies/court_roster/armies/regions 等表以 **TSV 文本块**给出（块头 `## 表名`，块内首行 tab 分隔列名，其后每行一条记录按列名对位、空字段为空串）；departments=已设衙门、technologies=已解锁科技（空表只有表头＝尚未设立，立新的别与已有重名）；powers/factions/classes 等其余字段在「## 其余字段（JSON）」内。算 delta 一律「相对该 TSV/JSON 里的当前值」，按列名取字段，不凭叙事印象。
 
 ## 模块化输出纪律
 

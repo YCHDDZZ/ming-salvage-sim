@@ -1,0 +1,102 @@
+{
+  "meta": {
+    "note": "可由皇帝诏书推动的预设科技池。研发推满结案后落 technologies 表成已解锁科技（纯清单/查重/展示，无月度产出）。modifiers 非空者额外挂一条永久帝国修正(legacy, duration=-1)；一次性数值效果照常走该 issue 的 effect_on_resolve。modifiers 结构同 opening_legacies。effect_summary 为效果文字摘要。不拘明末既有技术，皇帝强推超前之法亦可。表外自创科技不挂 modifiers。全省键指十五省：beizhili nanzhili shandong shanxi henan shaanxi zhejiang jiangxi huguang sichuan fujian guangdong guangxi yunnan guizhou。"
+  },
+  "technologies": [
+    {
+      "key": "huafei",
+      "name": "化肥",
+      "category": "科技",
+      "effect_summary": "粪壤之法大进，亩产骤增，各省粮足而民变难起",
+      "modifiers": {
+        "regions": {
+          "beizhili": { "unrest": -10 }, "nanzhili": { "unrest": -10 },
+          "shandong": { "unrest": -10 }, "shanxi": { "unrest": -10 },
+          "henan": { "unrest": -10 }, "shaanxi": { "unrest": -10 },
+          "zhejiang": { "unrest": -10 }, "jiangxi": { "unrest": -10 },
+          "huguang": { "unrest": -10 }, "sichuan": { "unrest": -10 },
+          "fujian": { "unrest": -10 }, "guangdong": { "unrest": -10 },
+          "guangxi": { "unrest": -10 }, "yunnan": { "unrest": -10 },
+          "guizhou": { "unrest": -10 }
+        }
+      }
+    },
+    {
+      "key": "huoqi_xinfa",
+      "name": "火器新法",
+      "category": "科技",
+      "effect_summary": "铳炮规制划一、火药提纯，京营边军火力大进",
+      "modifiers": {
+        "armies": { "guanning": { "equipment": 5 } }
+      }
+    },
+    {
+      "key": "lianbing_xinzhi",
+      "name": "练兵新制",
+      "category": "科技",
+      "effect_summary": "营操规章一新、汰弱补强，诸军训练有素",
+      "modifiers": {
+        "armies": { "guanning": { "training": 5 } }
+      }
+    },
+    {
+      "key": "zhongdou_fazhong",
+      "name": "种痘法",
+      "category": "科技",
+      "effect_summary": "痘疹得防、疫死大减，民间生齿渐复",
+      "modifiers": { "民心": 4 }
+    },
+    {
+      "key": "shuangji_zhi",
+      "name": "复式记账",
+      "category": "科技",
+      "effect_summary": "出入两清、账目难欺，钱粮稽核之弊大减",
+      "modifiers": { "国库": 3 }
+    },
+    {
+      "key": "liangzhong_gailiang",
+      "name": "良种改良",
+      "category": "科技",
+      "effect_summary": "择优育种、推广耐旱稻麦，北方荒年少绝收、民变渐息",
+      "modifiers": {
+        "regions": {
+          "shaanxi": { "unrest": -8 }, "shanxi": { "unrest": -8 },
+          "henan": { "unrest": -8 }, "shandong": { "unrest": -8 }
+        }
+      }
+    },
+    {
+      "key": "fanche_shuili",
+      "name": "翻车水利",
+      "category": "科技",
+      "effect_summary": "龙骨翻车广布、灌溉便利，旱田得水、岁稔民安",
+      "modifiers": {
+        "regions": {
+          "huguang": { "unrest": -6 }, "jiangxi": { "unrest": -6 },
+          "sichuan": { "unrest": -6 }
+        }
+      }
+    },
+    {
+      "key": "kuangye_yelian",
+      "name": "矿冶炼法",
+      "category": "科技",
+      "effect_summary": "鼓风炼铁之法精进，铁产倍增、军械有料",
+      "modifiers": { "内库": 3 }
+    },
+    {
+      "key": "yishu_yisuan",
+      "name": "译书译算",
+      "category": "科技",
+      "effect_summary": "西法历算舆图渐译，士子开眼、庙算少误",
+      "modifiers": { "皇威": 2 }
+    },
+    {
+      "key": "haichuan_xinzhi",
+      "name": "海船新制",
+      "category": "科技",
+      "effect_summary": "福船广船规制改良、远洋有舰，海商水师并壮",
+      "modifiers": { "内库": 2 }
+    }
+  ]
+}
