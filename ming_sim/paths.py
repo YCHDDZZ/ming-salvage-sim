@@ -28,7 +28,14 @@ def bundled_root() -> Path:
     frozen：PyInstaller 解压临时目录 _MEIPASS。
     源码：仓库根（ming_sim/ 父目录）。"""
     if is_frozen():
-        return Path(getattr(sys, "_MEIPASS", os.path.dirname(sys.executable)))
+        meipass = getattr(sys, "_MEIPASS", "")
+        if meipass:
+            return Path(meipass)
+        exe_dir = Path(os.path.dirname(sys.executable))
+        internal_dir = exe_dir / "_internal"
+        if internal_dir.is_dir():
+            return internal_dir
+        return exe_dir
     return Path(__file__).resolve().parent.parent
 
 

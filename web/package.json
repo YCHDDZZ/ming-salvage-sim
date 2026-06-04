@@ -2,6 +2,8 @@
   "name": "ming-salvage-web",
   "private": true,
   "version": "0.1.0",
+  "description": "Electron desktop shell and web frontend for Ming Salvage Sim.",
+  "author": "Ming Salvage Sim",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -9,21 +11,64 @@
     "build": "tsc -b && vite build",
     "electron": "npm run build && electron electron/main.cjs",
     "electron:dev": "npm run build && electron electron/main.cjs",
+    "backend:build": "cd .. && python3 -m PyInstaller MingSalvageBackend.spec --noconfirm --distpath build/backend-dist --workpath build/backend-work",
+    "dist:mac": "npm run build && npm run backend:build && electron-builder --mac dir",
+    "dist:win": "npm run build && npm run backend:build && electron-builder --win dir",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^5.1.1",
-    "lucide-react": "^0.561.0",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "steamworks.js": "^0.4.0",
-    "typescript": "^5.9.3",
-    "vite": "^7.2.7"
+    "steamworks.js": "^0.4.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
     "electron": "^42.3.2",
-    "electron-builder": "^26.8.1"
+    "electron-builder": "^26.8.1",
+    "lucide-react": "^0.561.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7"
+  },
+  "build": {
+    "appId": "com.local.mingsalvagesim.electron",
+    "productName": "MingSalvageSim",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**",
+      "package.json",
+      "!node_modules/.cache/**",
+      "!node_modules/electron/**",
+      "!node_modules/electron-builder/**",
+      "!node_modules/typescript/**",
+      "!node_modules/vite/**",
+      "!node_modules/@vitejs/**",
+      "!node_modules/@babel/**",
+      "!node_modules/@esbuild/**",
+      "!node_modules/@rollup/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../build/backend-dist/MingSalvageBackend",
+        "to": "backend/MingSalvageBackend"
+      }
+    ],
+    "asarUnpack": [
+      "node_modules/steamworks.js/**"
+    ],
+    "mac": {
+      "category": "public.app-category.games",
+      "target": [
+        "dir"
+      ]
+    },
+    "win": {
+      "target": [
+        "dir"
+      ]
+    }
   }
 }

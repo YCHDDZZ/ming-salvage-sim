@@ -1,0 +1,124 @@
+name: electron-release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "electron-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-electron:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: mac
+            artifact_name: MingSalvageSim-mac-arm64
+            artifact_path: web/release/mac*
+            package_glob: mac*
+            zip_name: MingSalvageSim-mac-arm64.zip
+            arch: arm64
+          - os: windows-latest
+            target: win
+            artifact_name: MingSalvageSim-win
+            artifact_path: web/release/win*-unpacked
+            package_glob: win*-unpacked
+            zip_name: MingSalvageSim-win-x64.zip
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install Python deps
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Install web deps
+        working-directory: web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: web
+        run: npm run build
+
+      - name: Build backend sidecar
+        working-directory: web
+        run: npm run backend:build
+
+      - name: Build Electron package
+        working-directory: web
+        run: npx electron-builder --${{ matrix.target }} dir --${{ matrix.arch }}
+
+      - name: Create macOS zip package
+        if: matrix.target == 'mac'
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_dir="$(find web/release -maxdepth 1 -type d -name '${{ matrix.package_glob }}' | head -n 1)"
+          if [ -z "$package_dir" ]; then
+            echo "No package directory matched ${{ matrix.package_glob }}" >&2
+            exit 1
+          fi
+          app_path="$(find "$package_dir" -maxdepth 1 -type d -name '*.app' | head -n 1)"
+          if [ -z "$app_path" ]; then
+            echo "No .app bundle found in $package_dir" >&2
+            exit 1
+          fi
+          rm -f "web/release/${{ matrix.zip_name }}"
+          ditto -c -k --sequesterRsrc --keepParent "$app_path" "web/release/${{ matrix.zip_name }}"
+
+      - name: Create Windows zip package
+        if: matrix.target == 'win'
+        shell: pwsh
+        run: |
+          $matches = Get-ChildItem -Path "web/release" -Directory | Where-Object { $_.Name -like "${{ matrix.package_glob }}" }
+          if ($matches.Count -eq 0) {
+            throw "No package directory matched ${{ matrix.package_glob }}"
+          }
+          if ($matches.Count -gt 1) {
+            $names = $matches | ForEach-Object { $_.FullName }
+            throw "Multiple package directories matched ${{ matrix.package_glob }}: $names"
+          }
+          $zipPath = Join-Path "web/release" "${{ matrix.zip_name }}"
+          if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force
+          }
+          Compress-Archive -Path (Join-Path $matches[0].FullName "*") -DestinationPath $zipPath -Force
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: web/release/${{ matrix.zip_name }}
+          retention-days: 14
+
+      - name: Attach package to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/electron-v')
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes "Electron desktop build artifacts."
+          gh release upload "${GITHUB_REF_NAME}" "web/release/${{ matrix.zip_name }}" --clobber

@@ -9,6 +9,7 @@ const steam = require("./steam.cjs");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const host = "127.0.0.1";
+const isPackaged = app.isPackaged;
 
 let backend = null;
 let mainWindow = null;
@@ -82,9 +83,34 @@ const pythonExecutable = () => {
   return os.platform() === "win32" ? "python" : "python3";
 };
 
+const backendExecutablePath = () => {
+  const baseDir = process.resourcesPath;
+  const exeName = os.platform() === "win32" ? "MingSalvageBackend.exe" : "MingSalvageBackend";
+  return path.join(baseDir, "backend", "MingSalvageBackend", exeName);
+};
+
+const backendSpawnSpec = () => {
+  if (isPackaged) {
+    const executable = backendExecutablePath();
+    if (!fs.existsSync(executable)) {
+      throw new Error(`Packaged backend executable not found: ${executable}`);
+    }
+    return {
+      command: executable,
+      args: [],
+      cwd: path.dirname(executable),
+    };
+  }
+  return {
+    command: pythonExecutable(),
+    args: ["-m", "uvicorn", "web_app:app"],
+    cwd: repoRoot,
+  };
+};
+
 const startBackend = async () => {
   const port = await findOpenPort();
-  const dotenv = readDotEnv(path.join(repoRoot, ".env"));
+  const dotenv = isPackaged ? {} : readDotEnv(path.join(repoRoot, ".env"));
   const env = {
     ...process.env,
     ...dotenv,
@@ -93,9 +119,11 @@ const startBackend = async () => {
     MING_SIM_USER_DATA_DIR: path.join(app.getPath("userData"), "python-data"),
     PYTHONUNBUFFERED: "1",
   };
+  const spawnSpec = backendSpawnSpec();
+  const backendArgs = [...spawnSpec.args, "--host", host, "--port", String(port)];
 
-  backend = spawn(pythonExecutable(), ["-m", "uvicorn", "web_app:app", "--host", host, "--port", String(port)], {
-    cwd: repoRoot,
+  backend = spawn(spawnSpec.command, backendArgs, {
+    cwd: spawnSpec.cwd,
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });

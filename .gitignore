@@ -45,6 +45,7 @@ output
 # Frontend
 web/node_modules/
 web/dist/
+web/release/
 web/tsconfig.tsbuildinfo
 .vscode/
 
