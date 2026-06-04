@@ -337,6 +337,14 @@ def load_preset_departments() -> Dict[str, PresetDepartment]:
             corruption_risk=int_field(entry, "corruption_risk", path),
             effect_summary=str_field(entry, "effect_summary", path),
             modifiers=require_dict(entry.get("modifiers"), f"{path}.modifiers"),
+            theme=str_field(entry, "题材", path),
+            expected_months=int_field(entry, "预计月数", path),
+            bar_value=int_field(entry, "起步进度", path),
+            stage_text=str_field(entry, "stage_text", path),
+            resolve_condition=str_field(entry, "resolve_condition", path),
+            fail_condition=str_field(entry, "fail_condition", path),
+            effect_on_resolve=require_dict(entry.get("effect_on_resolve"), f"{path}.effect_on_resolve"),
+            effect_on_fail=require_dict(entry.get("effect_on_fail"), f"{path}.effect_on_fail"),
         )
     if not out:
         raise SystemExit("preset_departments.json 必须至少定义一项预设衙门。")
@@ -358,6 +366,14 @@ def load_preset_technologies() -> Dict[str, PresetTechnology]:
             category=str_field(entry, "category", path),
             effect_summary=str_field(entry, "effect_summary", path),
             modifiers=require_dict(entry.get("modifiers"), f"{path}.modifiers"),
+            theme=str_field(entry, "题材", path),
+            expected_months=int_field(entry, "预计月数", path),
+            bar_value=int_field(entry, "起步进度", path),
+            stage_text=str_field(entry, "stage_text", path),
+            resolve_condition=str_field(entry, "resolve_condition", path),
+            fail_condition=str_field(entry, "fail_condition", path),
+            effect_on_resolve=require_dict(entry.get("effect_on_resolve"), f"{path}.effect_on_resolve"),
+            effect_on_fail=require_dict(entry.get("effect_on_fail"), f"{path}.effect_on_fail"),
         )
     if not out:
         raise SystemExit("preset_technologies.json 必须至少定义一项预设科技。")

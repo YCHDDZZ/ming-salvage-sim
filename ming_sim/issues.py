@@ -107,14 +107,14 @@ def _apply_issue_buildings(
 
 def _attach_preset_legacy(
     db: GameDB, state: GameState, preset: object, source_issue_id: Optional[int],
-) -> None:
-    """预设部门/科技带 modifiers 非空时，挂一条永久 legacy（duration=-1）。
+) -> bool:
+    """预设部门/科技带 modifiers 非空时，挂一条永久 legacy（duration=-1）。返回是否挂了。
     modifiers 已在 content json 预校验，直接落库；非预设（preset=None）不挂。"""
     if preset is None:
-        return
+        return False
     modifiers = getattr(preset, "modifiers", None)
     if not isinstance(modifiers, dict) or not modifiers:
-        return
+        return False
     try:
         db.insert_legacy(
             state,
@@ -124,20 +124,70 @@ def _attach_preset_legacy(
             duration_months=-1,  # 永久
             source_issue_id=source_issue_id,
         )
+        return True
     except Exception as exc:
         print(f"[WARN] 预设 legacy 落库失败：{exc}；preset={getattr(preset,'key','?')}")
+        return False
+
+
+def _strip_legacy_if(effect: Dict[str, object], drop: bool) -> Dict[str, object]:
+    """drop=True 时返回剔掉 `帝国修正`/`legacy` 段的 effect 副本（预设已自动挂修正，防双倍）。"""
+    if not drop or not isinstance(effect, dict):
+        return effect
+    return {k: v for k, v in effect.items() if k not in ("legacy", "帝国修正")}
+
+
+def _find_preset_key(ni: Dict[str, object]) -> tuple:
+    """从新立 issue 的 effect_on_resolve.departments/technologies create op 里找预设 key。
+    返回 (scope, preset)；未命中返回 (None, None)。scope ∈ 'departments'/'technologies'。"""
+    eff = ni.get("effect_on_resolve")
+    if not isinstance(eff, dict):
+        return (None, None)
+    ctx = _ctx()
+    for scope, pool in (("departments", ctx.preset_departments), ("technologies", ctx.preset_technologies)):
+        ops = eff.get(scope)
+        if not isinstance(ops, list):
+            continue
+        for op in ops:
+            if isinstance(op, dict) and str(op.get("action") or "").lower() == "create":
+                preset = pool.get(str(op.get("key") or "").strip())
+                if preset is not None:
+                    return (scope, preset)
+    return (None, None)
+
+
+def _preset_override_new_issue(ni: Dict[str, object]) -> Dict[str, object]:
+    """LLM 新立 issue 若命中预设（effect 里带预设 key），用预设覆盖 issue 字段保证统一。
+    未命中返回原 ni。覆盖：题材/标题/预计月数/起步进度/阶段/解决条件/失败条件/effect_on_resolve/effect_on_fail。
+    名称按预设填；研发条件与一次性效果按预设（含 departments|technologies:create op 以便结案落实体挂修正）。"""
+    scope, preset = _find_preset_key(ni)
+    if preset is None:
+        return ni
+    merged = dict(ni)
+    merged["kind"] = "initiative"
+    merged["title"] = preset.name
+    merged["tags"] = preset.theme
+    merged["expected_months"] = preset.expected_months
+    merged["bar_value"] = preset.bar_value
+    merged["stage_text"] = preset.stage_text
+    merged["resolve_condition"] = preset.resolve_condition
+    merged["fail_condition"] = preset.fail_condition
+    merged["effect_on_resolve"] = dict(preset.effect_on_resolve)
+    merged["effect_on_fail"] = dict(preset.effect_on_fail)
+    return merged
 
 
 def _apply_issue_departments(
     db: GameDB, state: GameState, ops: object, reason: str,
     source_issue_id: Optional[int] = None,
-) -> List[Dict[str, object]]:
+) -> bool:
     """落地 issue effect 里的 departments 段：新设衙门随局势结案落 offices 表。
     op：{action:create, key?, name, authority_scope?, power?, ...}。命中预设池且 modifiers 非空 → 挂永久 legacy。
+    返回是否挂了预设 legacy（供调用方覆盖、忽略 LLM 自写的帝国修正，防双倍）。
     """
-    applied: List[Dict[str, object]] = []
+    attached = False
     if not isinstance(ops, list):
-        return applied
+        return attached
     presets = _ctx().preset_departments
     for op in ops:
         if not isinstance(op, dict):
@@ -149,14 +199,14 @@ def _apply_issue_departments(
                 preset = presets.get(key)
                 # 预设优先：命中则用预设字段，未命中用 LLM 给的字段（表外自创，无 legacy）
                 if preset is not None:
-                    dept = db.add_department(
+                    db.add_department(
                         preset.name, authority_scope=preset.authority_scope,
                         power=preset.power, responsibility=preset.responsibility,
                         corruption_risk=preset.corruption_risk, origin="issue",
                     )
-                    _attach_preset_legacy(db, state, preset, source_issue_id)
+                    attached = _attach_preset_legacy(db, state, preset, source_issue_id) or attached
                 else:
-                    dept = db.add_department(
+                    db.add_department(
                         str(op.get("name") or ""),
                         authority_scope=str(op.get("authority_scope") or ""),
                         power=int(op.get("power", 50)),
@@ -164,24 +214,24 @@ def _apply_issue_departments(
                         corruption_risk=int(op.get("corruption_risk", 30)),
                         origin="issue",
                     )
-                applied.append({"action": "create", "department": dept, "preset": bool(preset)})
             else:
                 print(f"[WARN] issue effect departments: action '{action}' 暂不支持（仅 create），跳过。")
         except Exception as exc:
             print(f"[WARN] issue effect departments 落库失败：{exc}；op={op}")
-    return applied
+    return attached
 
 
 def _apply_issue_technologies(
     db: GameDB, state: GameState, ops: object, reason: str,
     source_issue_id: Optional[int] = None,
-) -> List[Dict[str, object]]:
+) -> bool:
     """落地 issue effect 里的 technologies 段：科技随研发结案落 technologies 表（无月度产出）。
     op：{action:create, key?, name, category?, effect_summary?}。命中预设池且 modifiers 非空 → 挂永久 legacy。
+    返回是否挂了预设 legacy（供调用方覆盖、忽略 LLM 自写的帝国修正，防双倍）。
     """
-    applied: List[Dict[str, object]] = []
+    attached = False
     if not isinstance(ops, list):
-        return applied
+        return attached
     presets = _ctx().preset_technologies
     for op in ops:
         if not isinstance(op, dict):
@@ -192,24 +242,23 @@ def _apply_issue_technologies(
                 key = str(op.get("key") or "").strip()
                 preset = presets.get(key)
                 if preset is not None:
-                    tid = db.add_technology(
+                    db.add_technology(
                         state, preset.name, preset.category,
                         effect_summary=preset.effect_summary, origin="issue",
                     )
-                    _attach_preset_legacy(db, state, preset, source_issue_id)
+                    attached = _attach_preset_legacy(db, state, preset, source_issue_id) or attached
                 else:
-                    tid = db.add_technology(
+                    db.add_technology(
                         state, str(op.get("name") or ""),
                         str(op.get("category") or "科技"),
                         effect_summary=str(op.get("effect_summary") or ""),
                         origin="issue",
                     )
-                applied.append({"action": "create", "technology_id": tid, "preset": bool(preset)})
             else:
                 print(f"[WARN] issue effect technologies: action '{action}' 暂不支持（仅 create），跳过。")
         except Exception as exc:
             print(f"[WARN] issue effect technologies 落库失败：{exc}；op={op}")
-    return applied
+    return attached
 
 
 def issue_to_payload(row: sqlite3.Row, recent_advances: List[sqlite3.Row]) -> Dict[str, object]:
@@ -847,9 +896,9 @@ def apply_issue_tracker_output(
             _apply_economy_list(db, state, effect.get("economy") or [])
             _apply_faction_dict(db, effect.get("factions") or {})
             _apply_issue_buildings(db, state, effect.get("buildings"), _ISSUE_PSEUDO_EVENT, f"局势#{issue_id}结案")
-            _apply_issue_departments(db, state, effect.get("departments"), f"局势#{issue_id}结案", issue_id)
-            _apply_issue_technologies(db, state, effect.get("technologies"), f"局势#{issue_id}结案", issue_id)
-            _spawn_legacy_from_effect(db, state, effect, issue_id, str(new_row["title"]))
+            _preset_lg = _apply_issue_departments(db, state, effect.get("departments"), f"局势#{issue_id}结案", issue_id)
+            _preset_lg = _apply_issue_technologies(db, state, effect.get("technologies"), f"局势#{issue_id}结案", issue_id) or _preset_lg
+            _spawn_legacy_from_effect(db, state, _strip_legacy_if(effect, _preset_lg), issue_id, str(new_row["title"]))
         elif new_row["status"] == "failed":
             effect = json.loads(new_row["effect_on_fail"] or "{}")
             _apply_metric_dict(state, effect.get("metrics") or {}, db=db)
@@ -903,6 +952,9 @@ def apply_issue_tracker_output(
             print(f"[INFO] new_issue 已拒：'{title}'（origin_kind={origin_kind!r}，仅接 decree / event_pool）。")
             applied_new.append({"title": title, "rejected": True, "reason": "来源非 decree/event_pool 不许新立"})
             continue
+        # 命中预设（effect 带预设 key）→ 程序用预设覆盖 issue 字段，保证条件/难度/效果统一
+        ni = _preset_override_new_issue(ni)
+        title = str(ni.get("title") or title)
         kind = str(ni.get("kind") or "initiative")
         if kind == "initiative" and initiative_active >= 10:
             applied_new.append({"title": title, "rejected": True, "reason": "已有十事在办，朝廷分身乏术，难再添新工。"})
@@ -975,11 +1027,12 @@ def apply_issue_tracker_output(
             db, state, effect.get("buildings"),
             _ISSUE_PSEUDO_EVENT, f"局势#{issue_id}{'结案' if reason == 'resolved' else '失败'}",
         )
+        _preset_lg = False
         if reason == "resolved":
             # 部门/科技只随成功结案落实体（失败的设衙门/科研不落）
-            _apply_issue_departments(db, state, effect.get("departments"), f"局势#{issue_id}结案", issue_id)
-            _apply_issue_technologies(db, state, effect.get("technologies"), f"局势#{issue_id}结案", issue_id)
-        _spawn_legacy_from_effect(db, state, effect, issue_id, str(new_row["title"]))
+            _preset_lg = _apply_issue_departments(db, state, effect.get("departments"), f"局势#{issue_id}结案", issue_id)
+            _preset_lg = _apply_issue_technologies(db, state, effect.get("technologies"), f"局势#{issue_id}结案", issue_id) or _preset_lg
+        _spawn_legacy_from_effect(db, state, _strip_legacy_if(effect, _preset_lg), issue_id, str(new_row["title"]))
         applied_closes.append({
             "issue_id": issue_id,
             "title": new_row["title"],

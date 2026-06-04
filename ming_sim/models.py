@@ -214,8 +214,10 @@ class OpeningLegacy:
 
 @dataclass
 class PresetDepartment:
-    """可由皇帝诏书新设的预设衙门：立项结案后落 offices 表。modifiers 非空者挂永久 legacy。
-    见 content/preset_departments.json。表外自创部门不走此池、无 modifiers。"""
+    """可由皇帝诏书新设的预设衙门。LLM 新立局势带上 key→程序立项时用本预设覆盖 issue 字段
+    （题材/条件/月数/一次性 effect），结案落 offices 表并按 modifiers 挂永久 legacy。
+    见 content/preset_departments.json。表外自创部门不走此池、无 modifiers。
+    一次性奖励/惩罚走 effect_on_resolve/effect_on_fail；建立/失败条件预写，符合史实阻力。"""
     key: str
     name: str
     category: str
@@ -225,17 +227,34 @@ class PresetDepartment:
     corruption_risk: int
     effect_summary: str
     modifiers: Dict[str, object]
+    theme: str                                  # issue 题材（八枚举之一）
+    expected_months: int                        # 预计月数（定 inertia / 难度）
+    bar_value: int                              # 立项起步进度
+    stage_text: str                             # issue 起步阶段文案
+    resolve_condition: str                      # 怎么算建成
+    fail_condition: str                         # 怎么算黄
+    effect_on_resolve: Dict[str, object]        # 一次性建成奖励（含 departments:create）
+    effect_on_fail: Dict[str, object]           # 一次性失败代价
 
 
 @dataclass
 class PresetTechnology:
-    """可由皇帝诏书推动的预设科技：研发结案后落 technologies 表（无月度产出）。
-    modifiers 非空者挂永久 legacy。见 content/preset_technologies.json。"""
+    """可由皇帝诏书推动的预设科技。LLM 新立局势带上 key→程序立项时用本预设覆盖 issue 字段，
+    结案落 technologies 表（无月度产出）并按 modifiers 挂永久 legacy。
+    见 content/preset_technologies.json。一次性奖励/惩罚走 effect_on_resolve/effect_on_fail。"""
     key: str
     name: str
     category: str
     effect_summary: str
     modifiers: Dict[str, object]
+    theme: str
+    expected_months: int
+    bar_value: int
+    stage_text: str
+    resolve_condition: str
+    fail_condition: str
+    effect_on_resolve: Dict[str, object]
+    effect_on_fail: Dict[str, object]
 
 
 @dataclass
@@ -259,7 +278,7 @@ class GameState:
     def clamp(self) -> None:
         for key, value in list(self.metrics.items()):
             if key in ECONOMY_ACCOUNTS:
-                self.metrics[key] = max(0, value)
+                self.metrics[key] = int(value)
             else:
                 self.metrics[key] = max(0, min(100, value))
 

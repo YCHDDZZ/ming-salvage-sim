@@ -1,102 +1,117 @@
 {
   "meta": {
-    "note": "可由皇帝诏书推动的预设科技池。研发推满结案后落 technologies 表成已解锁科技（纯清单/查重/展示，无月度产出）。modifiers 非空者额外挂一条永久帝国修正(legacy, duration=-1)；一次性数值效果照常走该 issue 的 effect_on_resolve。modifiers 结构同 opening_legacies。effect_summary 为效果文字摘要。不拘明末既有技术，皇帝强推超前之法亦可。表外自创科技不挂 modifiers。全省键指十五省：beizhili nanzhili shandong shanxi henan shaanxi zhejiang jiangxi huguang sichuan fujian guangdong guangxi yunnan guizhou。"
+    "note": "可由皇帝诏书推动的预设科技池。LLM 新立局势若是某预设，照常写字段并带上 key；程序立项时用本预设覆盖 issue 字段，结案落 technologies 表（无月度产出）并按 modifiers 挂永久 legacy。一次性奖励/惩罚走 effect_on_resolve/effect_on_fail；研发条件/失败条件预写、符合明末试错难度（超前之法预计月数更长、起步更低）。modifiers 结构同 opening_legacies。effect_on_resolve 必带 technologies:[{action:create,key}]。修正幅度极小（单条单维 ±5 上限）。"
   },
   "technologies": [
     {
-      "key": "huafei",
-      "name": "化肥",
-      "category": "科技",
-      "effect_summary": "粪壤之法大进，亩产骤增，各省粮足而民变难起",
-      "modifiers": {
-        "regions": {
-          "beizhili": { "unrest": -10 }, "nanzhili": { "unrest": -10 },
-          "shandong": { "unrest": -10 }, "shanxi": { "unrest": -10 },
-          "henan": { "unrest": -10 }, "shaanxi": { "unrest": -10 },
-          "zhejiang": { "unrest": -10 }, "jiangxi": { "unrest": -10 },
-          "huguang": { "unrest": -10 }, "sichuan": { "unrest": -10 },
-          "fujian": { "unrest": -10 }, "guangdong": { "unrest": -10 },
-          "guangxi": { "unrest": -10 }, "yunnan": { "unrest": -10 },
-          "guizhou": { "unrest": -10 }
-        }
-      }
+      "key": "huafei", "name": "化肥", "category": "科技", "题材": "科技",
+      "预计月数": 10, "起步进度": 8,
+      "stage_text": "粪壤之法初试，土法配料未精、农人将信将疑，推广维艰",
+      "resolve_condition": "化肥配方试成、择省推广、亩产可见增益",
+      "fail_condition": "配料无效、伤苗减产或农人拒用而废，bar≤0",
+      "effect_on_resolve": {"国势": {"民心": 2}, "technologies": [{"action": "create", "key": "huafei"}]},
+      "effect_on_fail": {"国势": {"民心": -1}},
+      "modifiers": {"regions": {"beizhili": {"unrest": -10}, "nanzhili": {"unrest": -10}, "shandong": {"unrest": -10}, "shanxi": {"unrest": -10}, "henan": {"unrest": -10}, "shaanxi": {"unrest": -10}, "zhejiang": {"unrest": -10}, "jiangxi": {"unrest": -10}, "huguang": {"unrest": -10}, "sichuan": {"unrest": -10}, "fujian": {"unrest": -10}, "guangdong": {"unrest": -10}, "guangxi": {"unrest": -10}, "yunnan": {"unrest": -10}, "guizhou": {"unrest": -10}}},
+      "effect_summary": "粪壤之法大进，亩产骤增，各省粮足而民变难起"
     },
     {
-      "key": "huoqi_xinfa",
-      "name": "火器新法",
-      "category": "科技",
-      "effect_summary": "铳炮规制划一、火药提纯，京营边军火力大进",
-      "modifiers": {
-        "armies": { "guanning": { "equipment": 5 } }
-      }
+      "key": "huoqi_xinfa", "name": "火器新法", "category": "科技", "题材": "科技",
+      "预计月数": 6, "起步进度": 12,
+      "stage_text": "募西匠试铸新铳，铳炮规制不一、火药提纯未得法，废件颇多",
+      "resolve_condition": "火器新法试铸成、铳炮规制划一、择军配发",
+      "fail_condition": "炸膛伤匠、铸件不堪用或匠师星散，bar≤0",
+      "effect_on_resolve": {"technologies": [{"action": "create", "key": "huoqi_xinfa"}]},
+      "effect_on_fail": {"国势": {"国库": 0}, "钱粮": [{"账户": "国库", "增量": -5, "分类": "试铸折损", "原因": "火器新法试铸废件、料工耗损"}]},
+      "modifiers": {"armies": {"guanning": {"equipment": 5}}},
+      "effect_summary": "铳炮规制划一、火药提纯，京营边军火力大进"
     },
     {
-      "key": "lianbing_xinzhi",
-      "name": "练兵新制",
-      "category": "科技",
-      "effect_summary": "营操规章一新、汰弱补强，诸军训练有素",
-      "modifiers": {
-        "armies": { "guanning": { "training": 5 } }
-      }
+      "key": "lianbing_xinzhi", "name": "练兵新制", "category": "科技", "题材": "科技",
+      "预计月数": 5, "起步进度": 14,
+      "stage_text": "议改营操章程，将帅惮于裁汰、积弊难除，新制未行",
+      "resolve_condition": "练兵新制颁行、汰弱补强、诸军操演有素",
+      "fail_condition": "将帅阳奉阴违、营伍如故或哗变，bar≤0",
+      "effect_on_resolve": {"technologies": [{"action": "create", "key": "lianbing_xinzhi"}]},
+      "effect_on_fail": {"国势": {"皇威": -1}},
+      "modifiers": {"armies": {"guanning": {"training": 5}}},
+      "effect_summary": "营操规章一新、汰弱补强，诸军训练有素"
     },
     {
-      "key": "zhongdou_fazhong",
-      "name": "种痘法",
-      "category": "科技",
-      "effect_summary": "痘疹得防、疫死大减，民间生齿渐复",
-      "modifiers": { "民心": 4 }
+      "key": "zhongdou_fazhong", "name": "种痘法", "category": "科技", "题材": "科技",
+      "预计月数": 6, "起步进度": 10,
+      "stage_text": "试行人痘接种，医家秘技不传、民间疑惧，推行迟缓",
+      "resolve_condition": "种痘法试成推广、痘疹疫死渐减",
+      "fail_condition": "接种致疫、民间拒用或医家亡技，bar≤0",
+      "effect_on_resolve": {"国势": {"民心": 2}, "technologies": [{"action": "create", "key": "zhongdou_fazhong"}]},
+      "effect_on_fail": {"国势": {"民心": -1}},
+      "modifiers": {"民心": 4},
+      "effect_summary": "痘疹得防、疫死大减，民间生齿渐复"
     },
     {
-      "key": "shuangji_zhi",
-      "name": "复式记账",
-      "category": "科技",
-      "effect_summary": "出入两清、账目难欺，钱粮稽核之弊大减",
-      "modifiers": { "国库": 3 }
+      "key": "shuangji_zhi", "name": "复式记账", "category": "科技", "题材": "科技",
+      "预计月数": 4, "起步进度": 16,
+      "stage_text": "议行新式会计，胥吏惮于稽核、旧账难厘，抵牾颇多",
+      "resolve_condition": "复式记账颁行诸库、出入两清、稽核见效",
+      "fail_condition": "胥吏阻挠、账目愈乱或半途而废，bar≤0",
+      "effect_on_resolve": {"钱粮": [{"账户": "国库", "增量": 6, "分类": "稽核追欠", "原因": "复式记账厘清账目、稽出冒销"}], "technologies": [{"action": "create", "key": "shuangji_zhi"}]},
+      "effect_on_fail": {},
+      "modifiers": {"国库": 3},
+      "effect_summary": "出入两清、账目难欺，钱粮稽核之弊大减"
     },
     {
-      "key": "liangzhong_gailiang",
-      "name": "良种改良",
-      "category": "科技",
-      "effect_summary": "择优育种、推广耐旱稻麦，北方荒年少绝收、民变渐息",
-      "modifiers": {
-        "regions": {
-          "shaanxi": { "unrest": -8 }, "shanxi": { "unrest": -8 },
-          "henan": { "unrest": -8 }, "shandong": { "unrest": -8 }
-        }
-      }
+      "key": "liangzhong_gailiang", "name": "良种改良", "category": "科技", "题材": "科技",
+      "预计月数": 8, "起步进度": 10,
+      "stage_text": "试育耐旱良种，选种繁育需时、北地荒歉连年，未见速效",
+      "resolve_condition": "良种育成推广、北方荒年少绝收",
+      "fail_condition": "选育无成、良种不耐或农人弃用，bar≤0",
+      "effect_on_resolve": {"technologies": [{"action": "create", "key": "liangzhong_gailiang"}]},
+      "effect_on_fail": {},
+      "modifiers": {"regions": {"shaanxi": {"unrest": -8}, "shanxi": {"unrest": -8}, "henan": {"unrest": -8}, "shandong": {"unrest": -8}}},
+      "effect_summary": "择优育种、推广耐旱稻麦，北方荒年少绝收、民变渐息"
     },
     {
-      "key": "fanche_shuili",
-      "name": "翻车水利",
-      "category": "科技",
-      "effect_summary": "龙骨翻车广布、灌溉便利，旱田得水、岁稔民安",
-      "modifiers": {
-        "regions": {
-          "huguang": { "unrest": -6 }, "jiangxi": { "unrest": -6 },
-          "sichuan": { "unrest": -6 }
-        }
-      }
+      "key": "fanche_shuili", "name": "翻车水利", "category": "科技", "题材": "科技",
+      "预计月数": 4, "起步进度": 18,
+      "stage_text": "推广龙骨翻车，匠料分散、灌田之法待习，未及广布",
+      "resolve_condition": "翻车广布、旱田得灌、岁稔可期",
+      "fail_condition": "匠料不继、推广迟滞或徒劳无功，bar≤0",
+      "effect_on_resolve": {"technologies": [{"action": "create", "key": "fanche_shuili"}]},
+      "effect_on_fail": {},
+      "modifiers": {"regions": {"huguang": {"unrest": -6}, "jiangxi": {"unrest": -6}, "sichuan": {"unrest": -6}}},
+      "effect_summary": "龙骨翻车广布、灌溉便利，旱田得水、岁稔民安"
     },
     {
-      "key": "kuangye_yelian",
-      "name": "矿冶炼法",
-      "category": "科技",
-      "effect_summary": "鼓风炼铁之法精进，铁产倍增、军械有料",
-      "modifiers": { "内库": 3 }
+      "key": "kuangye_yelian", "name": "矿冶炼法", "category": "科技", "题材": "科技",
+      "预计月数": 6, "起步进度": 12,
+      "stage_text": "试行鼓风新炼法，矿监盘剥、炉户惮改，铁产未增",
+      "resolve_condition": "鼓风炼法试成、铁产倍增、军械有料",
+      "fail_condition": "炉废料损、矿户逃亡或矿监中饱，bar≤0",
+      "effect_on_resolve": {"钱粮": [{"账户": "内库", "增量": 5, "分类": "矿冶增产", "原因": "鼓风炼法铁产倍增、矿税渐充"}], "technologies": [{"action": "create", "key": "kuangye_yelian"}]},
+      "effect_on_fail": {},
+      "modifiers": {"内库": 3},
+      "effect_summary": "鼓风炼铁之法精进，铁产倍增、军械有料"
     },
     {
-      "key": "yishu_yisuan",
-      "name": "译书译算",
-      "category": "科技",
-      "effect_summary": "西法历算舆图渐译，士子开眼、庙算少误",
-      "modifiers": { "皇威": 2 }
+      "key": "yishu_yisuan", "name": "译书译算", "category": "科技", "题材": "科技",
+      "预计月数": 5, "起步进度": 14,
+      "stage_text": "开馆译西书，通儒难得、士林讥为奇技，译事迟缓",
+      "resolve_condition": "译书译算成帙、历算舆图渐布、士子开眼",
+      "fail_condition": "译人星散、士林抵制或译事中辍，bar≤0",
+      "effect_on_resolve": {"technologies": [{"action": "create", "key": "yishu_yisuan"}]},
+      "effect_on_fail": {},
+      "modifiers": {"皇威": 2},
+      "effect_summary": "西法历算舆图渐译，士子开眼、庙算少误"
     },
     {
-      "key": "haichuan_xinzhi",
-      "name": "海船新制",
-      "category": "科技",
-      "effect_summary": "福船广船规制改良、远洋有舰，海商水师并壮",
-      "modifiers": { "内库": 2 }
+      "key": "haichuan_xinzhi", "name": "海船新制", "category": "科技", "题材": "科技",
+      "预计月数": 7, "起步进度": 10,
+      "stage_text": "试改福广船制，船匠守旧、料木难备、远洋之舰未成",
+      "resolve_condition": "海船新制造成、远洋有舰、水师海商并壮",
+      "fail_condition": "新舰不堪风涛、料工耗竭或匠师亡技，bar≤0",
+      "effect_on_resolve": {"technologies": [{"action": "create", "key": "haichuan_xinzhi"}]},
+      "effect_on_fail": {},
+      "modifiers": {"内库": 2},
+      "effect_summary": "福船广船规制改良、远洋有舰，海商水师并壮"
     }
   ]
 }

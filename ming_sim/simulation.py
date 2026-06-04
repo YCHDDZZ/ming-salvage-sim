@@ -224,6 +224,16 @@ def _auto_table(rows: List[Dict[str, object]]) -> Dict[str, object]:
     return _table(rows, cols)
 
 
+def _preset_catalog(db: GameDB) -> Dict[str, object]:
+    """喂给 simulator/extractor 的预设清单（key→name），让 LLM 命中预设时填对 key。
+    只给 key/name；modifiers 由程序按 key 挂，不进 payload。"""
+    return {
+        "departments": [{"key": p.key, "name": p.name} for p in db.content.preset_departments.values()],
+        "technologies": [{"key": p.key, "name": p.name} for p in db.content.preset_technologies.values()],
+        "note": "新设衙门/科技若是清单内预设，部门/科技 create 填对应 key，程序自动挂永久国家修正；清单外自创不填 key。",
+    }
+
+
 
 
 def build_simulator_payload(
@@ -296,6 +306,7 @@ def build_simulator_payload(
         "buildings": _auto_table(db.building_payload()),
         "departments": _auto_table(db.department_payload()),
         "technologies": _auto_table(db.technology_payload()),
+        "preset_catalog": _preset_catalog(db),
         "court_roster": court_roster,
         "deaths_this_turn": deaths_this_turn or [],
         "debuts_this_turn": debuts_this_turn or [],
@@ -503,6 +514,7 @@ def _extractor_context_payload(
         "buildings": _auto_table(db.building_payload()),
         "departments": _auto_table(db.department_payload()),
         "technologies": _auto_table(db.technology_payload()),
+        "preset_catalog": _preset_catalog(db),
         "active_ministers": _auto_table(active_ministers),
         "offstage_ministers": _auto_table(offstage_ministers),
         "region_ids": [r["id"] for r in db.conn.execute("SELECT id FROM regions").fetchall()],
@@ -548,7 +560,7 @@ def _extractor_compat_payload(base: Dict[str, object]) -> Dict[str, object]:
 # 重复，从补充上下文里剔除，省掉约一半 extractor system 体积。
 _MODULE_DROP_FIELDS = (
     # 同名同格式，simulator_payload 已全量给出
-    "regions", "armies", "buildings", "departments", "technologies", "current_state",
+    "regions", "armies", "buildings", "departments", "technologies", "preset_catalog", "current_state",
     "active_issues", "candidate_events", "decree_text",
     "relevant_memories", "secret_orders",
     # 异名但同源：simulator_payload 已有等价视图，extractor prompt（score_extractor_shared.md:17、
