@@ -299,9 +299,7 @@ export function HistoryModal({ onClose }: { onClose: () => void }) {
     let alive = true;
     (async () => {
       try {
-        const resp = await fetch("/api/history/turns");
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const data = await api<{ turns: HistoryTurnItem[] }>("/api/history/turns");
         if (!alive) return;
         const list: HistoryTurnItem[] = data.turns || [];
         setTurns(list);
@@ -322,9 +320,7 @@ export function HistoryModal({ onClose }: { onClose: () => void }) {
     setDetailError("");
     (async () => {
       try {
-        const resp = await fetch(`/api/history/turn/${selectedTurn}`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const data = await api<HistoryDetail>(`/api/history/turn/${selectedTurn}`);
         if (alive) setDetail(data);
       } catch (e: any) {
         if (alive) setDetailError(e?.message || "加载失败");

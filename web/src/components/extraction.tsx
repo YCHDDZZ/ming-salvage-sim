@@ -13,9 +13,7 @@ export function ExtractionModal({ onClose }: { onClose: () => void }) {
     let alive = true;
     (async () => {
       try {
-        const resp = await fetch("/api/turn_extraction");
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const data = await api<ExtractionData>("/api/turn_extraction");
         if (alive) setExtraction(data);
       } catch (e: any) {
         if (alive) setError(e?.message || "加载失败");

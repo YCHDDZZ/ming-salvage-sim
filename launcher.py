@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import os
 import socket
+import subprocess
 import sys
 import threading
 import time
 import urllib.request
+import urllib.parse
 import webbrowser
 
 # Windows windowed (--noconsole) 下 sys.stdout/stderr = None。uvicorn 的
@@ -69,18 +71,34 @@ WINDOW_MIN_WIDTH = 1024
 WINDOW_MIN_HEIGHT = 720
 
 
-def _find_free_port(preferred: int = 8010) -> int:
-    """优先 8010，被占则系统分配。"""
+def _find_free_port(preferred: int | None = 8010) -> int:
+    """preferred 可用就用；传 None/0 则直接让系统分配。"""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
+        if not preferred:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
         try:
             s.bind(("127.0.0.1", preferred))
             return preferred
         except OSError:
+            _log(f"端口 {preferred} 已被占用，改用系统随机端口。")
             s.bind(("127.0.0.1", 0))
             return s.getsockname()[1]
     finally:
         s.close()
+
+
+def _launcher_port_preference() -> int | None:
+    raw = os.environ.get("MING_PORT", "").strip() or os.environ.get("PORT", "").strip()
+    if not raw:
+        return 8010
+    try:
+        port = int(raw)
+    except ValueError:
+        _log(f"MING_PORT/PORT={raw!r} 非法，改用随机端口。")
+        return None
+    return port if port > 0 else None
 
 
 def _wait_server_ready(url: str, timeout: float = 15.0) -> bool:
@@ -102,6 +120,122 @@ def _wait_server_ready(url: str, timeout: float = 15.0) -> bool:
 
 
 _server_error: str = ""
+
+
+def _read_launcher_log(max_bytes: int = 120_000) -> dict[str, object]:
+    from ming_sim.paths import user_data_dir
+    data_dir = user_data_dir()
+    log_path = data_dir / "launcher.log"
+    if not log_path.exists():
+        return {
+            "data_dir": str(data_dir),
+            "log_path": str(log_path),
+            "exists": False,
+            "content": "",
+        }
+    with open(log_path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        if size > max_bytes:
+            f.seek(-max_bytes, os.SEEK_END)
+            raw = f.read()
+            content = raw.decode("utf-8", errors="replace")
+            content = f"（仅显示最近 {max_bytes} 字节，完整日志见文件）\n\n{content}"
+        else:
+            f.seek(0)
+            content = f.read().decode("utf-8", errors="replace")
+    return {
+        "data_dir": str(data_dir),
+        "log_path": str(log_path),
+        "exists": True,
+        "content": content,
+    }
+
+
+def _open_user_data_dir() -> str:
+    from ming_sim.paths import user_data_dir
+    data_dir = user_data_dir()
+    if os.name == "nt":
+        os.startfile(str(data_dir))  # type: ignore[attr-defined]
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(data_dir)])
+    else:
+        subprocess.Popen(["xdg-open", str(data_dir)])
+    return str(data_dir)
+
+
+class LauncherDebugApi:
+    def get_launcher_log(self) -> dict[str, object]:
+        return _read_launcher_log()
+
+    def open_data_dir(self) -> dict[str, object]:
+        return {"ok": True, "data_dir": _open_user_data_dir()}
+
+
+def _debug_html(title: str, message: str) -> str:
+    import html
+    safe_title = html.escape(title)
+    safe_message = html.escape(message)
+    return f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>{safe_title}</title>
+  <style>
+    body {{ margin: 0; background: #160f0a; color: #f3e6c4; font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
+    main {{ max-width: 920px; margin: 0 auto; padding: 36px 28px; }}
+    h1 {{ margin: 0 0 10px; color: #f3d88b; font-size: 24px; }}
+    p {{ margin: 8px 0 18px; color: #d8c590; }}
+    button {{ margin-right: 10px; padding: 8px 16px; border-radius: 6px; border: 1px solid rgba(226,180,86,.45); background: rgba(255,245,215,.1); color: #f3e6c4; cursor: pointer; }}
+    pre {{ min-height: 360px; max-height: 58vh; overflow: auto; white-space: pre-wrap; word-break: break-word; padding: 14px; border: 1px solid rgba(226,180,86,.25); border-radius: 6px; background: rgba(0,0,0,.34); }}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>{safe_title}</h1>
+    <p>{safe_message}</p>
+    <p id="paths">读取日志中...</p>
+    <button onclick="openDir()">打开存档目录</button>
+    <button onclick="loadLog()">刷新日志</button>
+    <pre id="log">读取中...</pre>
+  </main>
+  <script>
+    async function loadLog() {{
+      try {{
+        const info = await window.pywebview.api.get_launcher_log();
+        document.getElementById('paths').textContent = '存档目录：' + info.data_dir + ' | 日志：' + info.log_path;
+        document.getElementById('log').textContent = info.exists ? (info.content || 'launcher.log 为空。') : '尚未找到 launcher.log。';
+      }} catch (err) {{
+        document.getElementById('log').textContent = String(err);
+      }}
+    }}
+    async function openDir() {{
+      await window.pywebview.api.open_data_dir();
+    }}
+    window.addEventListener('pywebviewready', loadLog);
+  </script>
+</body>
+</html>"""
+
+
+def _show_debug_window(title: str, message: str, debug: bool) -> None:
+    try:
+        import webview
+        webview.create_window(
+            title,
+            html=_debug_html(title, message),
+            width=980,
+            height=720,
+            min_size=(760, 520),
+            js_api=LauncherDebugApi(),
+            confirm_close=False,
+        )
+        webview.start(debug=debug, http_server=False)
+    except Exception:
+        try:
+            _open_user_data_dir()
+        except Exception:
+            pass
 
 
 def _start_server(port: int, debug: bool) -> None:
@@ -147,9 +281,10 @@ def main() -> None:
 
     _log(f"启动：frozen={getattr(sys,'frozen',False)} platform={sys.platform} py={sys.version.split()[0]}")
 
-    port = _find_free_port(8010)
+    port = _find_free_port(_launcher_port_preference())
     # WKWebView 对 IP 偶有 bug；用 localhost 域名走 DNS 解析更稳
-    url = f"http://localhost:{port}"
+    api_base = f"http://127.0.0.1:{port}"
+    url = f"http://localhost:{port}?api={urllib.parse.quote(api_base, safe=':/')}"
     _log(f"分配端口 {port} url={url}")
 
     # uvicorn 跑 daemon 线程，主线程留给 pywebview / 浏览器 fallback
@@ -159,10 +294,12 @@ def main() -> None:
 
     if not _wait_server_ready(url):
         if _server_error:
-            _log(f"服务启动超时（>15s）——子线程已崩，根因：\n{_server_error}")
+            message = f"服务启动超时（>15s）——子线程已崩，根因：\n{_server_error}"
         else:
-            _log("服务启动超时（>15s）——子线程未崩但 15s 内未 listen（可能首次冷启过慢/被防火墙拦）。")
-        sys.exit(1)
+            message = "服务启动超时（>15s）——子线程未崩但 15s 内未 listen（可能首次冷启过慢/被防火墙拦）。"
+        _log(message)
+        _show_debug_window("启动失败 · 调试", message, debug)
+        return
     _log(f"服务已就绪：{url}")
 
     if use_browser:
@@ -185,6 +322,7 @@ def main() -> None:
             width=WINDOW_WIDTH,
             height=WINDOW_HEIGHT,
             min_size=(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT),
+            js_api=LauncherDebugApi(),
             confirm_close=False,
         )
         _log("create_window 完成，调用 webview.start()...")

@@ -1,7 +1,14 @@
 import React from "react";
 import { Loader2, Trash2 } from "lucide-react";
-import { api, normalizeApiError } from "../api";
+import { api, apiUrl, normalizeApiError } from "../api";
 import type { MenuCampaign, MenuStatus } from "../types";
+
+type LauncherLogInfo = {
+  data_dir: string;
+  log_path: string;
+  exists: boolean;
+  content: string;
+};
 
 export function MenuPage({
   status,
@@ -20,6 +27,7 @@ export function MenuPage({
   const [showApiForm, setShowApiForm] = React.useState(false);
   const [showSaveList, setShowSaveList] = React.useState(false);
   const [showGameSettings, setShowGameSettings] = React.useState(false);
+  const [showDebugTools, setShowDebugTools] = React.useState(false);
 
   const guard = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -89,6 +97,9 @@ export function MenuPage({
           <button className="menu-btn" disabled={!!busy} onClick={() => setShowGameSettings(true)}>
             游戏设置
           </button>
+          <button className="menu-btn" disabled={!!busy} onClick={() => setShowDebugTools(true)}>
+            调试
+          </button>
         </div>
 
         {busy && <div className="menu-busy">{busy}</div>}
@@ -135,6 +146,74 @@ export function MenuPage({
           }}
         />
       )}
+
+      {showDebugTools && (
+        <DebugToolsModal onClose={() => setShowDebugTools(false)} />
+      )}
+    </div>
+  );
+}
+
+function DebugToolsModal({ onClose }: { onClose: () => void }) {
+  const [info, setInfo] = React.useState<LauncherLogInfo | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState("");
+
+  const loadLog = React.useCallback(async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      const payload = window.pywebview?.api?.get_launcher_log
+        ? await window.pywebview.api.get_launcher_log()
+        : await api<LauncherLogInfo>("/api/menu/debug/launcher_log");
+      setInfo(payload);
+    } catch (e: any) {
+      setErr(e?.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void loadLog();
+  }, [loadLog]);
+
+  const openDataDir = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      if (window.pywebview?.api?.open_data_dir) {
+        await window.pywebview.api.open_data_dir();
+      } else {
+        await api("/api/menu/debug/open_data_dir", { method: "POST" });
+      }
+    } catch (e: any) {
+      setErr(e?.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="menu-modal-bg" onClick={onClose}>
+      <div className="menu-modal menu-debug-modal" onClick={(e) => e.stopPropagation()}>
+        <h2>调试</h2>
+        <p className="menu-hint">存档目录：{info?.data_dir || "读取中..."}</p>
+        <p className="menu-hint">日志文件：{info?.log_path || "读取中..."}</p>
+        {err && <div className="menu-error">{err}</div>}
+        <div className="menu-modal-actions menu-debug-actions">
+          <button onClick={openDataDir} disabled={busy}>打开存档目录</button>
+          <button onClick={loadLog} disabled={busy}>{busy ? "读取中..." : "刷新日志"}</button>
+        </div>
+        <pre className="menu-launcher-log">
+          {info?.exists
+            ? info.content || "launcher.log 为空。"
+            : "尚未找到 launcher.log。打包启动器运行后会写入此文件。"}
+        </pre>
+        <div className="menu-modal-actions">
+          <button className="primary" onClick={onClose}>关闭</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -265,7 +344,7 @@ export function ApiSettingsModal({
     setBusy(true);
     setErr("");
     try {
-      const response = await fetch("/api/menu/llm", {
+      const response = await fetch(apiUrl("/api/menu/llm"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

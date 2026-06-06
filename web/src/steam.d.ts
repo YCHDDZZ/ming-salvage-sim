@@ -38,8 +38,27 @@ type SteamServerAuthResult = SteamStatus & {
   data?: unknown;
 };
 
+type LauncherLogInfo = {
+  data_dir: string;
+  log_path: string;
+  exists: boolean;
+  content: string;
+};
+
 declare global {
+  interface ImportMeta {
+    env: {
+      VITE_API_BASE?: string;
+    };
+  }
+
   interface Window {
+    pywebview?: {
+      api?: {
+        get_launcher_log?: () => Promise<LauncherLogInfo>;
+        open_data_dir?: () => Promise<{ ok: boolean; data_dir: string }>;
+      };
+    };
     steam?: {
       getStatus: () => Promise<SteamStatus>;
       getAuthTicket: (identity?: string) => Promise<SteamAuthTicket>;

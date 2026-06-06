@@ -13,6 +13,8 @@ import os
 import queue
 import random
 import re
+import subprocess
+import sys
 import threading
 import time
 from typing import Any, AsyncIterator, Dict, Iterator, List, Optional
@@ -81,7 +83,8 @@ _CONDITION_DISPLAY_REPLACEMENTS = [
     ("hidden_land", "隐田"),
     ("tax_per_turn", "月税"),
     ("public_support", "民心"),
-    ("grain_security", "粮食"),
+    ("grain_output", "粮食年产"),
+    ("grain_stock", "存粮"),
     ("unrest", "动乱"),
     ("gentry_resistance", "士绅阻力"),
     ("military_pressure", "边防压力"),
@@ -2039,6 +2042,54 @@ async def api_menu_delete_save(name: str) -> Dict[str, Any]:
     return {"saves": _scan_saves(), "campaigns": _scan_campaigns()}
 
 
+@app.get("/api/menu/debug/launcher_log")
+async def api_menu_debug_launcher_log() -> Dict[str, Any]:
+    """主菜单调试：读取 launcher.log 最近内容，便于 .app 双击模式排障。"""
+    data_dir = user_data_dir()
+    log_path = data_dir / "launcher.log"
+    if not log_path.exists():
+        return {
+            "data_dir": str(data_dir),
+            "log_path": str(log_path),
+            "exists": False,
+            "content": "",
+        }
+    max_bytes = 120_000
+    with open(log_path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        if size > max_bytes:
+            f.seek(-max_bytes, os.SEEK_END)
+            raw = f.read()
+            content = raw.decode("utf-8", errors="replace")
+            content = f"（仅显示最近 {max_bytes} 字节，完整日志见文件）\n\n{content}"
+        else:
+            f.seek(0)
+            content = f.read().decode("utf-8", errors="replace")
+    return {
+        "data_dir": str(data_dir),
+        "log_path": str(log_path),
+        "exists": True,
+        "content": content,
+    }
+
+
+@app.post("/api/menu/debug/open_data_dir")
+async def api_menu_debug_open_data_dir() -> Dict[str, Any]:
+    """用系统文件管理器打开用户数据/存档目录。"""
+    data_dir = user_data_dir()
+    try:
+        if os.name == "nt":
+            os.startfile(str(data_dir))  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(data_dir)])
+        else:
+            subprocess.Popen(["xdg-open", str(data_dir)])
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"打开目录失败：{exc}")
+    return {"ok": True, "data_dir": str(data_dir)}
+
+
 @app.post("/api/menu/exit_to_menu")
 async def api_menu_exit() -> Dict[str, Any]:
     """退回菜单：关 session 但不删 DB。"""
@@ -2190,6 +2241,7 @@ async def api_menu_save_game_settings(request: GameSettingsRequest) -> Dict[str,
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1):\d+$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

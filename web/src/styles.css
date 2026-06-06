@@ -6854,6 +6854,10 @@ button:disabled {
   overflow: hidden;
 }
 
+.menu-debug-modal {
+  width: min(820px, 94vw);
+}
+
 .menu-modal h2 {
   margin: 0 0 8px;
   color: #f3d88b;
@@ -6910,6 +6914,28 @@ button:disabled {
   margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid rgba(226, 180, 86, 0.22);
+}
+
+.menu-debug-actions {
+  justify-content: flex-start;
+  margin: 10px 0 14px;
+}
+
+.menu-launcher-log {
+  min-height: 300px;
+  max-height: min(460px, 52vh);
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid rgba(226, 180, 86, 0.24);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.32);
+  color: #ead8ad;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .menu-modal-actions button {

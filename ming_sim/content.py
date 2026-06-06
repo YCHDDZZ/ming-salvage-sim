@@ -167,7 +167,6 @@ def load_region_content() -> Dict[str, Region]:
             registered_land=int_field(item, "registered_land", ctx),
             hidden_land=int_field(item, "hidden_land", ctx),
             tax_per_turn=int_field(item, "tax_per_turn", ctx),
-            grain_security=int_field(item, "grain_security", ctx),
             gentry_resistance=int_field(item, "gentry_resistance", ctx),
             military_pressure=int_field(item, "military_pressure", ctx),
             status=str_field(item, "status", ctx),
@@ -577,6 +576,7 @@ class GameContent:
     season_simulator_prompt: str = ""
     score_extractor_shared_prompt: str = ""
     score_extractor_module_prompts: Dict[str, str] = field(default_factory=dict)
+    module_shared_prompt: str = ""
     module_merged_prompts: Dict[str, str] = field(default_factory=dict)
     chapter_memory_prompt: str = ""
     ending_summary_prompt: str = ""
@@ -652,6 +652,7 @@ class GameContent:
                 "issues": load_text_asset("prompts/score_extractor_issues.md"),
                 "personnel_secret": load_text_asset("prompts/score_extractor_personnel_secret.md"),
             },
+            module_shared_prompt=load_text_asset("prompts/module_shared.md"),
             module_merged_prompts={
                 "internal": load_text_asset("prompts/module_internal.md"),
                 "military_external": load_text_asset("prompts/module_military_external.md"),

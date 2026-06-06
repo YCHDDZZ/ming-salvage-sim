@@ -271,8 +271,10 @@ def build_simulator_payload(
     region_rows = [
         dict(r) for r in db.conn.execute(
             "SELECT name,kind,population,public_support,unrest,natural_disaster,"
-            "human_disaster,registered_land,hidden_land,tax_per_turn,grain_security,"
+            "human_disaster,registered_land,hidden_land,tax_per_turn,"
             "gentry_resistance,military_pressure,status,controlled_by,"
+            "json_extract(fiscal,'$.grain_output') as grain_output,"
+            "json_extract(fiscal,'$.grain_stock') as grain_stock,"
             "json_extract(fiscal,'$.corruption') as corruption FROM regions ORDER BY id"
         ).fetchall()
     ]
@@ -753,8 +755,10 @@ def _extractor_context_payload(
     region_rows = [
         dict(r) for r in db.conn.execute(
             "SELECT id,name,kind,population,public_support,unrest,natural_disaster,"
-            "human_disaster,registered_land,hidden_land,tax_per_turn,grain_security,"
+            "human_disaster,registered_land,hidden_land,tax_per_turn,"
             "gentry_resistance,military_pressure,status,controlled_by,"
+            "json_extract(fiscal,'$.grain_output') as grain_output,"
+            "json_extract(fiscal,'$.grain_stock') as grain_stock,"
             "json_extract(fiscal,'$.corruption') as corruption FROM regions ORDER BY id"
         ).fetchall()
     ]

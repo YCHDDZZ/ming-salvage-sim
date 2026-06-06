@@ -505,7 +505,7 @@ export function RegionDetailModal({
             <tr><th>编号</th><td>{region.id}</td><th>类型</th><td>{region.kind}</td></tr>
             <tr><th>归属</th><td>{region.controlled_by || "ming"}</td><th>人口</th><td>{region.population}万</td></tr>
             <tr><th>民心</th><td>{region.public_support}</td><th>动乱</th><td>{region.unrest}</td></tr>
-            <tr><th>粮食年产</th><td>{fiscalValue(region, "grain_output")}万石</td><th>存粮<span className="intel-th-note">（仓储）</span></th><td>{region.grain_security}万石</td></tr>
+            <tr><th>粮食年产</th><td>{fiscalValue(region, "grain_output")}万石</td><th>可调余粮</th><td>{fiscalValue(region, "grain_stock")}万石</td></tr>
             <tr><th>边防压力</th><td colSpan={3}>{region.military_pressure}</td></tr>
             <tr><th className="intel-section-th" colSpan={4}>在册田亩 {region.registered_land}万亩 · 黄册登记田（官民田＋藩王庄田＋皇庄），仅官民田纳国库田赋</th></tr>
             <tr><th>├ 官民田<span className="intel-th-note">（→国库田赋）</span></th><td>{fiscalValue(region, "guan_min_tian")}万亩</td><th>├ 藩王庄田<span className="intel-th-note">（免税）</span></th><td>{fiscalValue(region, "wang_tian")}万亩</td></tr>

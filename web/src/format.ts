@@ -181,7 +181,7 @@ export const cnValue = (v: any) => (v == null ? "" : (EN_VALUE_CN[String(v)] || 
 // 查不到的回退原值，至少不空。
 export const EN_FIELD_CN: Record<string, string> = {
   // 地区
-  public_support: "民心", unrest: "动乱", grain_security: "粮食安全",
+  public_support: "民心", unrest: "动乱", grain_output: "粮食年产", grain_stock: "可调余粮",
   gentry_resistance: "士绅阻力", military_pressure: "边防压力", corruption: "腐败度",
   population: "人口", registered_land: "在册田亩", hidden_land: "隐田",
   tax_per_turn: "月税", natural_disaster: "天灾", human_disaster: "人祸",
@@ -242,7 +242,7 @@ export const getMapIntelStyle = (node: MapNode): React.CSSProperties => {
 
 export const LEGACY_FIELD_LABELS: Record<string, string> = {
   public_support: "民心", unrest: "动乱", gentry_resistance: "士绅阻力", military_pressure: "边防压力",
-  tax_per_turn: "月税", grain_security: "粮食", corruption: "腐败度",
+  tax_per_turn: "月税", grain_output: "粮食年产", grain_stock: "可调余粮", corruption: "腐败度",
   morale: "士气", training: "训练", loyalty: "忠诚", supply: "补给", equipment: "装备",
   arrears: "欠饷", mobility: "机动",
 };

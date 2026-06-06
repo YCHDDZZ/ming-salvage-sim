@@ -17,8 +17,9 @@ export type Region = {
   tax_actual?: number;
   tax_efficiency?: number;
   tax_breakdown?: Record<string, number>;
-  fiscal?: Record<string, number>;
-  grain_security: number;
+  fiscal?: Record<string, number | string>;
+  grain_output?: number;
+  grain_stock?: number;
   gentry_resistance: number;
   military_pressure: number;
   status: string;

@@ -127,7 +127,6 @@ class Region:
     registered_land: int   # 在册田亩（万亩）＝黄册登记可征税田＝官民田+藩王庄田+皇庄之和
     hidden_land: int       # 隐田（万亩）＝账外逃赋田：官民田被缙绅诡寄/飞洒/漏籍 ＋ 藩王超额侵占的民田。独立于在册，清丈即转入在册官民田。不含藩王钦赐免税庄田/皇庄
     tax_per_turn: int
-    grain_security: int    # 存粮（万石）＝地区仓储/粮食安全度。年产走 fiscal.grain_output
     gentry_resistance: int
     military_pressure: int
     status: str

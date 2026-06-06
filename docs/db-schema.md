@@ -72,7 +72,7 @@ infer_office_type_from_office` 照旧）。各 Mixin 共享 `self.conn` / `self.
 ### regions.py — 地区与阶级
 | 表 | 作用 | 关键字段 |
 |---|---|---|
-| `regions` | 两京十三省盘面 | `id(PK), name, population, public_support, unrest, registered_land, hidden_land, tax_per_turn, grain_security, gentry_resistance, military_pressure, controlled_by, fiscal(json)` |
+| `regions` | 两京十三省盘面 | `id(PK), name, population, public_support, unrest, registered_land, hidden_land, tax_per_turn, gentry_resistance, military_pressure, controlled_by, fiscal(json; grain_output=粮食年产, grain_stock=存粮)` |
 | `region_logs` | 地区字段变更留痕 | `turn, region_id, field, old/new_value, delta, reason, event_id, edict_id, actor` |
 | `classes` | 阶级（key=name@region_id） | `name+region_id(PK), population, satisfaction, leverage, agenda` |
 

@@ -157,7 +157,6 @@ class _SchemaMixin:
                 registered_land INTEGER NOT NULL,
                 hidden_land INTEGER NOT NULL,
                 tax_per_turn INTEGER NOT NULL,
-                grain_security INTEGER NOT NULL,
                 gentry_resistance INTEGER NOT NULL,
                 military_pressure INTEGER NOT NULL,
                 status TEXT NOT NULL,
@@ -678,5 +677,95 @@ class _SchemaMixin:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        self._drop_regions_grain_security_column()
+        self._migrate_region_grain_fiscal_fields()
         self.conn.commit()
         self.init_fiscal_config()
+
+    def _migrate_region_grain_fiscal_fields(self) -> None:
+        """旧存档迁移：确保 regions.fiscal 带年度粮食产量与当前存粮字段。"""
+        content_defaults = {
+            region_id: {
+                "grain_output": int((region.fiscal or {}).get("grain_output") or 0),
+                "grain_stock": int((region.fiscal or {}).get("grain_stock") or 0),
+            }
+            for region_id, region in self.content.regions.items()
+        }
+        for row in self.conn.execute("SELECT id, fiscal FROM regions").fetchall():
+            region_id = str(row["id"])
+            try:
+                fiscal = json.loads(str(row["fiscal"] or "{}"))
+            except Exception:
+                fiscal = {}
+            if not isinstance(fiscal, dict):
+                fiscal = {}
+            defaults = content_defaults.get(region_id, {})
+            changed = False
+            for key in ("grain_output", "grain_stock"):
+                if key in fiscal:
+                    continue
+                fiscal[key] = int(defaults.get(key, 0) or 0)
+                changed = True
+            if changed:
+                self.conn.execute(
+                    "UPDATE regions SET fiscal = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (json.dumps(fiscal, ensure_ascii=False), region_id),
+                )
+
+    def _drop_regions_grain_security_column(self) -> None:
+        """旧存档迁移：regions.grain_security → fiscal.grain_stock，然后删旧列。"""
+        columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(regions)").fetchall()}
+        if "grain_security" not in columns:
+            return
+        for row in self.conn.execute("SELECT id, fiscal, grain_security FROM regions").fetchall():
+            try:
+                fiscal = json.loads(str(row["fiscal"] or "{}"))
+            except Exception:
+                fiscal = {}
+            fiscal.setdefault("grain_stock", int(row["grain_security"] or 0))
+            self.conn.execute(
+                "UPDATE regions SET fiscal = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (json.dumps(fiscal, ensure_ascii=False), str(row["id"])),
+            )
+        self.conn.commit()
+        self.conn.execute("PRAGMA foreign_keys=OFF")
+        try:
+            self.conn.executescript(
+                """
+                CREATE TABLE regions__new (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    kind TEXT NOT NULL,
+                    population INTEGER NOT NULL,
+                    public_support INTEGER NOT NULL,
+                    unrest INTEGER NOT NULL,
+                    natural_disaster TEXT NOT NULL,
+                    human_disaster TEXT NOT NULL,
+                    registered_land INTEGER NOT NULL,
+                    hidden_land INTEGER NOT NULL,
+                    tax_per_turn INTEGER NOT NULL,
+                    gentry_resistance INTEGER NOT NULL,
+                    military_pressure INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    controlled_by TEXT NOT NULL DEFAULT 'ming',
+                    fiscal TEXT NOT NULL DEFAULT '{}',
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(controlled_by) REFERENCES powers(id)
+                );
+
+                INSERT INTO regions__new
+                (id, name, kind, population, public_support, unrest, natural_disaster, human_disaster,
+                 registered_land, hidden_land, tax_per_turn, gentry_resistance, military_pressure,
+                 status, controlled_by, fiscal, updated_at)
+                SELECT id, name, kind, population, public_support, unrest, natural_disaster, human_disaster,
+                       registered_land, hidden_land, tax_per_turn, gentry_resistance, military_pressure,
+                       status, controlled_by, fiscal, updated_at
+                FROM regions;
+
+                DROP TABLE regions;
+                ALTER TABLE regions__new RENAME TO regions;
+                """
+            )
+            self.conn.commit()
+        finally:
+            self.conn.execute("PRAGMA foreign_keys=ON")

@@ -1,7 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { Crown, Loader2, X } from "lucide-react";
-import { api, streamChat, streamCourtChat, summarizeCourtChat as summarizeCourtChatApi } from "./api";
+import { api, apiUrl, streamChat, streamCourtChat, summarizeCourtChat as summarizeCourtChatApi } from "./api";
 import { AppointmentDrawer, ArmyDrawer, BuildingDrawer, CourtDrawer, EconomyDrawer, HaremDrawer, RegionDetailModal, RegionDrawer } from "./components/drawers";
 import { ExtractionModal } from "./components/extraction";
 import { GameMenuModal } from "./components/gameMenu";
@@ -119,7 +119,7 @@ function App() {
   const uploadPortrait = React.useCallback(async (ministerName: string, file: File) => {
     const form = new FormData();
     form.append("file", file);
-    const resp = await fetch(`/api/consorts/${encodeURIComponent(ministerName)}/portrait`, {
+    const resp = await fetch(apiUrl(`/api/consorts/${encodeURIComponent(ministerName)}/portrait`), {
       method: "POST",
       body: form,
     });
@@ -225,7 +225,7 @@ function App() {
   }, [loadState]);
 
   const exitToMenu = React.useCallback(async () => {
-    await fetch("/api/menu/exit_to_menu", { method: "POST" });
+    await api("/api/menu/exit_to_menu", { method: "POST" });
     setState(null);
     setAppView("menu");
     await refreshMenuStatus();
@@ -884,7 +884,7 @@ function App() {
     try {
       // 作弊强制结算项随颁诏一次性穿入；发出即清空，绝不跨回合。
       const cheatPayload = cheatDirective.trim();
-      const response = await fetch("/api/decree/issue/stream", {
+      const response = await fetch(apiUrl("/api/decree/issue/stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cheat: cheatPayload }),
@@ -923,7 +923,7 @@ function App() {
     setSettleNarrative("");
     setError("");
     try {
-      const response = await fetch("/api/decree/resolve_decisions/stream", {
+      const response = await fetch(apiUrl("/api/decree/resolve_decisions/stream"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ choices }),

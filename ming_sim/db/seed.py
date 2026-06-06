@@ -148,9 +148,9 @@ class _SeedMixin:
                 """
                 INSERT OR IGNORE INTO regions
                 (id, name, kind, population, public_support, unrest, natural_disaster, human_disaster,
-                 registered_land, hidden_land, tax_per_turn, grain_security, gentry_resistance,
+                 registered_land, hidden_land, tax_per_turn, gentry_resistance,
                  military_pressure, status, controlled_by, fiscal)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     region.id,
@@ -164,7 +164,6 @@ class _SeedMixin:
                     region.registered_land,
                     region.hidden_land,
                     region.tax_per_turn,
-                    region.grain_security,
                     region.gentry_resistance,
                     region.military_pressure,
                     region.status,

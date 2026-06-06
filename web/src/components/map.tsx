@@ -786,9 +786,10 @@ export function NodeIntel({ node }: { node: MapNode }) {
             <tr><th>人口</th><td>{region.population}万</td><th>田亩</th><td>{region.registered_land}万亩</td></tr>
             <tr><th>民心</th><td>{region.public_support}</td><th>动乱</th><td>{region.unrest}</td></tr>
             <tr>
-              <th>粮食</th><td>{region.grain_security}</td>
-              <th>实收</th><td>{regionMonthlyTax(region)}万/月</td>
+              <th>粮食年产</th><td>{Number(region.fiscal?.grain_output ?? region.grain_output ?? 0)}万石</td>
+              <th>可调余粮</th><td>{Number(region.fiscal?.grain_stock ?? region.grain_stock ?? 0)}万石</td>
             </tr>
+            <tr><th>实收</th><td colSpan={3}>{regionMonthlyTax(region)}万/月</td></tr>
             <tr><th>归属</th><td>{labelPower(region.controlled_by || "ming")}</td><th>类型</th><td>{region.kind}</td></tr>
             <tr><th>天灾</th><td colSpan={3}>{region.natural_disaster}</td></tr>
             <tr><th>人祸</th><td colSpan={3}>{region.human_disaster}</td></tr>

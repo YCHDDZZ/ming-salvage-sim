@@ -256,7 +256,7 @@ export function ShutdownTab() {
     setBusy(true);
     setErr("");
     try {
-      await fetch("/api/menu/shutdown", { method: "POST" });
+      await api("/api/menu/shutdown", { method: "POST" });
       // server 已发 SIGTERM 给自己；前端尝试关页面（浏览器可能拦截），否则提示用户。
       setTimeout(() => {
         try { window.close(); } catch { /* noop */ }

@@ -2,6 +2,12 @@ import React from "react";
 import { forwardSteamEvents } from "./steamEvents";
 import type { ApiErrorDetail, ChatResponse, CourtChatMessage, CourtChatResponse } from "./types";
 
+declare global {
+  interface Window {
+    MING_API_BASE?: string;
+  }
+}
+
 export class ApiRequestError extends Error {
   detail: ApiErrorDetail;
 
@@ -31,8 +37,25 @@ export const formatApiError = (error: any, fallback: string) => {
   return detail.code ? `[${detail.code}] ${detail.message || fallback}` : detail.message || fallback;
 };
 
+const normalizeApiBase = (value: string) => value.trim().replace(/\/+$/, "");
+
+export const apiBase = () => {
+  const params = new URLSearchParams(window.location.search);
+  const fromQuery = params.get("api") || params.get("api_base") || "";
+  const fromWindow = window.MING_API_BASE || "";
+  const fromEnv = import.meta.env.VITE_API_BASE || "";
+  return normalizeApiBase(fromQuery || fromWindow || fromEnv);
+};
+
+export const apiUrl = (path: string) => {
+  if (/^https?:\/\//i.test(path)) return path;
+  const base = apiBase();
+  if (!base) return path;
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+};
+
 export const api = async <T,>(path: string, options?: RequestInit): Promise<T> => {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
     ...options,
   });
@@ -65,7 +88,7 @@ export const streamChat = async (
   message: string,
   onDelta: (delta: string) => void,
 ): Promise<ChatResponse> => {
-  const response = await fetch(`/api/ministers/${encodeURIComponent(ministerName)}/chat/stream`, {
+  const response = await fetch(apiUrl(`/api/ministers/${encodeURIComponent(ministerName)}/chat/stream`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message }),
@@ -116,7 +139,7 @@ export const streamCourtChat = async (
   onConclusion?: (message: CourtChatMessage) => void,
   signal?: AbortSignal,
 ): Promise<CourtChatResponse> => {
-  const response = await fetch("/api/court_chat/stream", {
+  const response = await fetch(apiUrl("/api/court_chat/stream"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, ministers }),

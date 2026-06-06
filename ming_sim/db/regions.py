@@ -16,7 +16,7 @@ from ming_sim.constants import (
     BUILDING_QUANTITY_FIELDS, BUILDING_SCORE_FIELDS, BUILDING_TEXT_FIELDS,
     ECONOMY_ACCOUNTS, POWER_FIELD_LABELS, POWER_SCORE_FIELDS,
     POWER_FIELD_ALIASES, POWER_TEXT_FIELDS, MONEY_UNIT, REGION_FIELD_LABELS, REGION_QUANTITY_FIELDS,
-    FISCAL_SCORE_FIELDS, REGION_FIELD_ALIASES, REGION_SCORE_FIELDS, REGION_TEXT_FIELDS, TURN_UNIT,
+    FISCAL_QUANTITY_FIELDS, FISCAL_SCORE_FIELDS, REGION_FIELD_ALIASES, REGION_SCORE_FIELDS, REGION_TEXT_FIELDS, TURN_UNIT,
 )
 from ming_sim.content import GameContent
 from ming_sim.matching import match_army_id_from_text, match_region_id_from_text
@@ -68,7 +68,8 @@ class _RegionsMixin:
                     "hidden_land": int(row["hidden_land"]),
                     "tax_per_turn": int(row["tax_per_turn"]),
                     "fiscal": fiscal,
-                    "grain_security": int(row["grain_security"]),
+                    "grain_output": int(fiscal.get("grain_output") or 0),
+                    "grain_stock": int(fiscal.get("grain_stock") or 0),
                     "gentry_resistance": int(row["gentry_resistance"]),
                     "military_pressure": int(row["military_pressure"]),
                     "status": row["status"],
@@ -85,12 +86,18 @@ class _RegionsMixin:
         total_tax_value = int(total_tax["total"] or 0)
         parts = []
         for row in rows:
+            try:
+                fiscal = json.loads(str(row["fiscal"] or "{}"))
+            except Exception:
+                fiscal = {}
             held = ""
             if str(row["controlled_by"]) != "ming":
                 held = f"【已为{self.power_display_name(row['controlled_by'])}所据】"
             parts.append(
                 f"{row['name']}{held}：民心{row['public_support']}、动乱{row['unrest']}、"
-                f"粮食{row['grain_security']}万石、田赋{format_money(monthly_amount(int(row['tax_per_turn'])))}/{TURN_UNIT}，{row['status']}"
+                f"粮食年产{int(fiscal.get('grain_output') or 0)}万石、"
+                f"可调余粮{int(fiscal.get('grain_stock') or 0)}万石、"
+                f"田赋{format_money(monthly_amount(int(row['tax_per_turn'])))}/{TURN_UNIT}，{row['status']}"
             )
         return f"地区警讯：{'；'.join(parts)}。两京十三省田赋账面合计{format_money(monthly_amount(total_tax_value))}/{TURN_UNIT}（不含辽饷/盐/商）。"
 
@@ -104,9 +111,14 @@ class _RegionsMixin:
         held = ""
         if str(row["controlled_by"]) != "ming":
             held = f"，控制权：已为{self.power_display_name(row['controlled_by'])}所据（非大明辖治）"
+        try:
+            fiscal = json.loads(str(row["fiscal"] or "{}"))
+        except Exception:
+            fiscal = {}
         return (
             f"{row['name']}（{row['kind']}）{held}：人口{row['population']}万人，"
-            f"民心{row['public_support']}，动乱{row['unrest']}，粮食{row['grain_security']}万石，"
+            f"民心{row['public_support']}，动乱{row['unrest']}，"
+            f"粮食年产{int(fiscal.get('grain_output') or 0)}万石，可调余粮{int(fiscal.get('grain_stock') or 0)}万石，"
             f"田亩{row['registered_land']}万亩，隐田{row['hidden_land']}万亩，"
             f"田赋账面{format_money(monthly_amount(int(row['tax_per_turn'])))}/{TURN_UNIT}（另有辽饷/盐/商各计），"
             f"士绅阻力{row['gentry_resistance']}，军事压力{row['military_pressure']}。"
@@ -159,23 +171,26 @@ class _RegionsMixin:
                     continue
                 # 先判字段合法，再取值：非法字段直接报清楚。
                 all_direct = REGION_SCORE_FIELDS + REGION_QUANTITY_FIELDS + REGION_TEXT_FIELDS
-                if field not in all_direct and field not in FISCAL_SCORE_FIELDS:
+                if field not in all_direct and field not in FISCAL_SCORE_FIELDS and field not in FISCAL_QUANTITY_FIELDS:
                     raise LLMContractError(
                         f"{TURN_UNIT}末执行评估引用了非法地区字段：'{raw_field}'（地区 '{region_id}'）。"
-                        f"合法字段：{all_direct + FISCAL_SCORE_FIELDS}"
+                        f"合法字段：{all_direct + FISCAL_SCORE_FIELDS + FISCAL_QUANTITY_FIELDS}"
                     )
 
                 # ── fiscal JSON 子字段（corruption 等）────────────────────────
-                if field in FISCAL_SCORE_FIELDS:
+                if field in FISCAL_SCORE_FIELDS or field in FISCAL_QUANTITY_FIELDS:
                     fiscal: dict = json.loads(str(row["fiscal"] or "{}"))
-                    old_value = fiscal.get(field, 50)
+                    old_value = fiscal.get(field, 50 if field in FISCAL_SCORE_FIELDS else 0)
                     delta = int(value)
-                    # 帝国修正：该地区该字段若有 active 修正符，先放大/缩小 delta
-                    net_pct = int(((self.legacy_modifiers(state).get("regions") or {})
-                                   .get(region_id) or {}).get(field, 0) or 0)
-                    if net_pct:
-                        delta = self.apply_legacy_pct(delta, net_pct)
-                    new_value = max(0, min(100, int(old_value) + delta))
+                    if field in FISCAL_SCORE_FIELDS:
+                        # 帝国修正：该地区该字段若有 active 修正符，先放大/缩小 delta
+                        net_pct = int(((self.legacy_modifiers(state).get("regions") or {})
+                                       .get(region_id) or {}).get(field, 0) or 0)
+                        if net_pct:
+                            delta = self.apply_legacy_pct(delta, net_pct)
+                        new_value = max(0, min(100, int(old_value) + delta))
+                    else:
+                        new_value = max(0, int(old_value) + delta)
                     actual_delta = new_value - int(old_value)
                     if actual_delta == 0:
                         continue

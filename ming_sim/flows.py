@@ -370,6 +370,66 @@ def _apply_economy_list(
     return applied
 
 
+def apply_annual_grain_flows(db: GameDB, state: GameState) -> List[Dict[str, object]]:
+    """12月年度粮食结算：年产入仓，再按人口扣全年口粮。"""
+    if int(state.period) != 12:
+        return []
+
+    cfg = db.get_fiscal_config()
+    try:
+        per_capita = int(cfg.get("人均年耗粮_base", 3))
+    except (TypeError, ValueError):
+        per_capita = 3
+    per_capita = max(0, per_capita)
+
+    rows = db.conn.execute(
+        "SELECT id, name, population, fiscal FROM regions"
+    ).fetchall()
+    flows: List[Dict[str, object]] = []
+    for row in rows:
+        region_id = str(row["id"])
+        name = str(row["name"])
+        population = int(row["population"] or 0)
+        try:
+            fiscal: dict = json.loads(row["fiscal"] or "{}")
+        except (TypeError, json.JSONDecodeError):
+            fiscal = {}
+
+        old_stock = int(fiscal.get("grain_stock") or 0)
+        grain_output = int(fiscal.get("grain_output") or 0)
+        annual_consumption = round(population * per_capita)
+        new_stock = max(0, old_stock + grain_output - annual_consumption)
+        actual_delta = new_stock - old_stock
+
+        fiscal["grain_stock"] = new_stock
+        db.conn.execute(
+            "UPDATE regions SET fiscal = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (json.dumps(fiscal, ensure_ascii=False), region_id),
+        )
+
+        reason = f"年度粮食结算：年产入仓{grain_output}万石，人口耗粮{annual_consumption}万石"
+        if actual_delta != 0:
+            db.conn.execute(
+                """
+                INSERT INTO region_logs
+                (turn, year, period, region_id, field, old_value, new_value, delta, reason, event_id, edict_id, actor)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, '户部')
+                """,
+                (
+                    state.turn, state.year, state.period, region_id,
+                    "grain_stock", str(old_stock), str(new_stock), actual_delta, reason,
+                ),
+            )
+
+        flows.append({
+            "dir": "grain", "region": name, "output": grain_output,
+            "consumption": annual_consumption, "delta": actual_delta, "stock": new_stock,
+        })
+
+    db.conn.commit()
+    return flows
+
+
 def apply_fixed_period_flows(db: GameDB, state: GameState) -> List[Dict[str, object]]:
     """月度财政 tick：固定收支（compute_budget_lines 定额）+ 军饷逐军 + 建筑逐项落账，LLM 推演前完成。"""
     flows: List[Dict[str, object]] = []
@@ -514,6 +574,7 @@ def apply_fixed_period_flows(db: GameDB, state: GameState) -> List[Dict[str, obj
     # 帝国修正（旧称遗产）不在此自我落账：它作为百分比修正符，由 record_issue_economy_move /
     # apply_region_deltas / apply_army_deltas 在每笔增量落账时按维度净 pct 放大/缩小。
     # 因此上面的固定收支（田赋/军饷/建筑产出）已自动被修正，无需独立 tick，否则会重复计。
+    flows.extend(apply_annual_grain_flows(db, state))
     return flows
 
 

@@ -22,10 +22,11 @@ SCORE_METRICS = ("民心", "皇威")
 TURN_UNIT = "月"
 
 REGION_SCORE_FIELDS = ("public_support", "unrest", "gentry_resistance", "military_pressure")
-REGION_QUANTITY_FIELDS = ("population", "registered_land", "hidden_land", "tax_per_turn", "grain_security")
+REGION_QUANTITY_FIELDS = ("population", "registered_land", "hidden_land", "tax_per_turn")
 REGION_TEXT_FIELDS = ("natural_disaster", "human_disaster", "status", "controlled_by")
 # fiscal JSON 子字段白名单（0-100量表，存在 regions.fiscal 列里）
 FISCAL_SCORE_FIELDS = ("corruption",)
+FISCAL_QUANTITY_FIELDS = ("grain_output", "grain_stock")
 ARMY_SCORE_FIELDS = ("supply", "morale", "training", "equipment", "arrears", "mobility", "loyalty")
 ARMY_QUANTITY_FIELDS = ("manpower", "maintenance_per_turn")
 ARMY_TEXT_FIELDS = ("station", "commander", "controller", "troop_type", "status", "owner_power")
@@ -111,7 +112,8 @@ REGION_FIELD_LABELS = {
     "registered_land": "田亩",
     "hidden_land": "隐田",
     "tax_per_turn": "税收",
-    "grain_security": "粮食",
+    "grain_output": "粮食年产",
+    "grain_stock": "可调余粮",
     "gentry_resistance": "士绅阻力",
     "military_pressure": "军事压力",
     "status": "状态",
@@ -139,14 +141,19 @@ REGION_FIELD_ALIASES = {
     **{field: field for field in REGION_SCORE_FIELDS + REGION_QUANTITY_FIELDS + REGION_TEXT_FIELDS},
     "民心": "public_support",
     "动乱": "unrest",
-    "粮食": "grain_security",
-    "粮食安全": "grain_security",
     "士绅": "gentry_resistance",
     "士绅阻力": "gentry_resistance",
     "军事": "military_pressure",
     "军事压力": "military_pressure",
     "腐败": "corruption",
     "腐败度": "corruption",
+    "grain_output": "grain_output",
+    "粮食年产": "grain_output",
+    "粮产": "grain_output",
+    "grain_stock": "grain_stock",
+    "存粮": "grain_stock",
+    "可调余粮": "grain_stock",
+    "粮食库存": "grain_stock",
     "人口": "population",
     "田亩": "registered_land",
     "登记田亩": "registered_land",

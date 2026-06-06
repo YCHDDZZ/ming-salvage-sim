@@ -92,17 +92,14 @@ export function defaultCourtPct(index: number, total: number): { px: number; py:
 // 坐标存百分比（0-1），持久化到服务端 db（按存档隔离）
 export async function loadCourtPos(): Promise<Record<string, { px: number; py: number }>> {
   try {
-    const r = await fetch("/api/court_layout");
-    if (!r.ok) return {};
-    const d = await r.json();
+    const d = await api<{ layout: string }>("/api/court_layout");
     return JSON.parse(d.layout || "{}");
   } catch { return {}; }
 }
 
 export function saveCourtPos(pos: Record<string, { px: number; py: number }>) {
-  fetch("/api/court_layout", {
+  api("/api/court_layout", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ layout: JSON.stringify(pos) }),
   }).catch(() => {});
 }

@@ -5,7 +5,7 @@
     "tax_unit": "万两/月",
     "score_unit": "0-100",
     "note": "世界盘面：大明省份、边镇、外域、草原与藩属使用同一 regions 结构；controlled_by 表示当前控制势力。",
-    "fiscal_schema": "fiscal JSON列：huang_tian=皇庄万亩(两京)→内库, wang_tian=藩王庄田万亩(免税), guan_min_tian=官民田万亩→国库田赋, tian_fu_li=可选·本省田赋亩率毫/亩/年(覆盖fiscal_config全局250；江南可高/边地可低/0=罢征), grain_output=粮食年产万石(地力×在册亩), liao_xiang=辽饷月摊万两, salt_tax=盐税月基数万两, commerce_tax=商税月基数万两, corruption=腐败度0-100。田赋=官民田×亩率/10000/12；田亩人口按史实7亿亩·1.5亿口"
+    "fiscal_schema": "fiscal JSON列：huang_tian=皇庄万亩(两京)→内库, wang_tian=藩王庄田万亩(免税), guan_min_tian=官民田万亩→国库田赋, tian_fu_li=可选·本省田赋亩率毫/亩/年(覆盖fiscal_config全局250；江南可高/边地可低/0=罢征), grain_output=粮食年产万石(地力×在册亩), grain_stock=可调余粮万石(本省扣除民食后的官仓、常平仓、市场可采买余粮合计), liao_xiang=辽饷月摊万两, salt_tax=盐税月基数万两, commerce_tax=商税月基数万两, corruption=腐败度0-100。田赋=官民田×亩率/10000/12；田亩人口按史实7亿亩·1.5亿口"
   },
   "regions": [
     {
@@ -20,7 +20,6 @@
       "registered_land": 4200,
       "hidden_land": 1240,
       "tax_per_turn": 5,
-      "grain_security": 2160,
       "gentry_resistance": 55,
       "military_pressure": 70,
       "status": "京师粮价、蓟镇压力、勋贵与京营腐败。",
@@ -32,8 +31,9 @@
         "salt_tax": 5,
         "commerce_tax": 8,
         "corruption": 62,
-        "grain_output": 2310,
-        "tian_fu_li": 250
+        "grain_output": 3100,
+        "tian_fu_li": 250,
+        "grain_stock": 2160
       },
       "controlled_by": "ming"
     },
@@ -49,7 +49,6 @@
       "registered_land": 9800,
       "hidden_land": 5950,
       "tax_per_turn": 19,
-      "grain_security": 3950,
       "gentry_resistance": 85,
       "military_pressure": 25,
       "status": "财赋核心，士绅阻力极高，漕粮能否实入国库是关键。",
@@ -62,7 +61,8 @@
         "commerce_tax": 15,
         "corruption": 44,
         "grain_output": 9310,
-        "tian_fu_li": 340
+        "tian_fu_li": 340,
+        "grain_stock": 3950
       },
       "controlled_by": "ming"
     },
@@ -78,7 +78,6 @@
       "registered_land": 5200,
       "hidden_land": 2850,
       "tax_per_turn": 10,
-      "grain_security": 1090,
       "gentry_resistance": 55,
       "military_pressure": 55,
       "status": "漕运、登莱和辽东支援节点，兵变与海防皆需盯防。",
@@ -90,8 +89,9 @@
         "salt_tax": 8,
         "commerce_tax": 5,
         "corruption": 52,
-        "grain_output": 3120,
-        "tian_fu_li": 250
+        "grain_output": 3600,
+        "tian_fu_li": 250,
+        "grain_stock": 1090
       },
       "controlled_by": "ming"
     },
@@ -107,7 +107,6 @@
       "registered_land": 3900,
       "hidden_land": 2040,
       "tax_per_turn": 7,
-      "grain_security": 610,
       "gentry_resistance": 50,
       "military_pressure": 65,
       "status": "宣大军需、晋商银流与旱灾交叠，地方承压。",
@@ -119,8 +118,9 @@
         "salt_tax": 3,
         "commerce_tax": 4,
         "corruption": 58,
-        "grain_output": 1638,
-        "tian_fu_li": 210
+        "grain_output": 2600,
+        "tian_fu_li": 210,
+        "grain_stock": 610
       },
       "controlled_by": "ming"
     },
@@ -136,7 +136,6 @@
       "registered_land": 5000,
       "hidden_land": 2860,
       "tax_per_turn": 8,
-      "grain_security": 1010,
       "gentry_resistance": 52,
       "military_pressure": 45,
       "status": "中原流民通道，水旱、逃户和流寇苗头相互牵连。",
@@ -148,8 +147,9 @@
         "salt_tax": 0,
         "commerce_tax": 3,
         "corruption": 55,
-        "grain_output": 3100,
-        "tian_fu_li": 240
+        "grain_output": 3300,
+        "tian_fu_li": 240,
+        "grain_stock": 1010
       },
       "controlled_by": "ming"
     },
@@ -165,7 +165,6 @@
       "registered_land": 3100,
       "hidden_land": 1510,
       "tax_per_turn": 6,
-      "grain_security": 170,
       "gentry_resistance": 42,
       "military_pressure": 55,
       "status": "流寇源头，饥荒、驿卒、欠饷和地方失控已经并发。",
@@ -177,8 +176,9 @@
         "salt_tax": 0,
         "commerce_tax": 2,
         "corruption": 72,
-        "grain_output": 1178,
-        "tian_fu_li": 170
+        "grain_output": 2205,
+        "tian_fu_li": 170,
+        "grain_stock": 170
       },
       "controlled_by": "ming"
     },
@@ -194,7 +194,6 @@
       "registered_land": 6100,
       "hidden_land": 3710,
       "tax_per_turn": 12,
-      "grain_security": 2790,
       "gentry_resistance": 78,
       "military_pressure": 28,
       "status": "财赋与手工业重地，海贸灰区和士绅舆论牵制税制。",
@@ -207,7 +206,8 @@
         "commerce_tax": 8,
         "corruption": 38,
         "grain_output": 6100,
-        "tian_fu_li": 330
+        "tian_fu_li": 330,
+        "grain_stock": 2790
       },
       "controlled_by": "ming"
     },
@@ -223,7 +223,6 @@
       "registered_land": 5300,
       "hidden_land": 2970,
       "tax_per_turn": 10,
-      "grain_security": 1920,
       "gentry_resistance": 64,
       "military_pressure": 25,
       "status": "粮税尚可，但宗族自保、税粮截留使中央实收打折。",
@@ -236,7 +235,8 @@
         "commerce_tax": 5,
         "corruption": 48,
         "grain_output": 4770,
-        "tian_fu_li": 280
+        "tian_fu_li": 280,
+        "grain_stock": 1920
       },
       "controlled_by": "ming"
     },
@@ -252,7 +252,6 @@
       "registered_land": 7600,
       "hidden_land": 4120,
       "tax_per_turn": 14,
-      "grain_security": 3920,
       "gentry_resistance": 58,
       "military_pressure": 32,
       "status": "天下粮仓之一，调粮、流寇过境和地方团练需要平衡。",
@@ -265,7 +264,8 @@
         "commerce_tax": 4,
         "corruption": 50,
         "grain_output": 6992,
-        "tian_fu_li": 260
+        "tian_fu_li": 260,
+        "grain_stock": 3920
       },
       "controlled_by": "ming"
     },
@@ -281,7 +281,6 @@
       "registered_land": 4600,
       "hidden_land": 2250,
       "tax_per_turn": 9,
-      "grain_security": 1650,
       "gentry_resistance": 45,
       "military_pressure": 30,
       "status": "西南纵深，土司关系和交通困难决定治理上限。",
@@ -294,7 +293,8 @@
         "commerce_tax": 3,
         "corruption": 60,
         "grain_output": 3588,
-        "tian_fu_li": 220
+        "tian_fu_li": 220,
+        "grain_stock": 1650
       },
       "controlled_by": "ming"
     },
@@ -310,7 +310,6 @@
       "registered_land": 3600,
       "hidden_land": 1930,
       "tax_per_turn": 7,
-      "grain_security": 810,
       "gentry_resistance": 62,
       "military_pressure": 35,
       "status": "海贸、水师和走私税源交织，禁海与开海都会牵动地方。",
@@ -323,7 +322,8 @@
         "commerce_tax": 6,
         "corruption": 45,
         "grain_output": 3060,
-        "tian_fu_li": 280
+        "tian_fu_li": 280,
+        "grain_stock": 810
       },
       "controlled_by": "ming"
     },
@@ -339,7 +339,6 @@
       "registered_land": 4200,
       "hidden_land": 2230,
       "tax_per_turn": 8,
-      "grain_security": 1360,
       "gentry_resistance": 58,
       "military_pressure": 25,
       "status": "海贸与澳门西学入口，地方自治强，税源不易直达中央。",
@@ -352,7 +351,8 @@
         "commerce_tax": 8,
         "corruption": 55,
         "grain_output": 3444,
-        "tian_fu_li": 270
+        "tian_fu_li": 270,
+        "grain_stock": 1360
       },
       "controlled_by": "ming"
     },
@@ -368,7 +368,6 @@
       "registered_land": 2400,
       "hidden_land": 1050,
       "tax_per_turn": 5,
-      "grain_security": 360,
       "gentry_resistance": 38,
       "military_pressure": 25,
       "status": "土司协调与交通困难是主问题，中央钱粮汲取能力有限。",
@@ -380,8 +379,9 @@
         "salt_tax": 0,
         "commerce_tax": 1,
         "corruption": 65,
-        "grain_output": 1320,
-        "tian_fu_li": 190
+        "grain_output": 1530,
+        "tian_fu_li": 190,
+        "grain_stock": 360
       },
       "controlled_by": "ming"
     },
@@ -397,7 +397,6 @@
       "registered_land": 2600,
       "hidden_land": 1170,
       "tax_per_turn": 5,
-      "grain_security": 520,
       "gentry_resistance": 40,
       "military_pressure": 22,
       "status": "土司、矿税和边地交通决定治理成本。",
@@ -409,8 +408,9 @@
         "salt_tax": 0,
         "commerce_tax": 2,
         "corruption": 68,
-        "grain_output": 1300,
-        "tian_fu_li": 180
+        "grain_output": 1660,
+        "tian_fu_li": 180,
+        "grain_stock": 520
       },
       "controlled_by": "ming"
     },
@@ -426,7 +426,6 @@
       "registered_land": 2100,
       "hidden_land": 900,
       "tax_per_turn": 4,
-      "grain_security": 200,
       "gentry_resistance": 36,
       "military_pressure": 25,
       "status": "山地治理弱、军屯衰败，适合小步安抚和整饬。",
@@ -438,8 +437,9 @@
         "salt_tax": 0,
         "commerce_tax": 1,
         "corruption": 70,
-        "grain_output": 945,
-        "tian_fu_li": 170
+        "grain_output": 1275,
+        "tian_fu_li": 170,
+        "grain_stock": 200
       },
       "controlled_by": "ming"
     },
@@ -455,7 +455,6 @@
       "registered_land": 550,
       "hidden_land": 170,
       "tax_per_turn": 1,
-      "grain_security": 30,
       "gentry_resistance": 20,
       "military_pressure": 90,
       "status": "宁远、锦州一线为明军前沿，堡寨、军屯、辽民与关宁军命运相连。",
@@ -467,8 +466,9 @@
         "salt_tax": 0,
         "commerce_tax": 0,
         "corruption": 50,
-        "grain_output": 192,
-        "tian_fu_li": 150
+        "grain_output": 405,
+        "tian_fu_li": 150,
+        "grain_stock": 30
       },
       "controlled_by": "ming"
     },
@@ -484,7 +484,6 @@
       "registered_land": 50,
       "hidden_land": 10,
       "tax_per_turn": 0,
-      "grain_security": 6,
       "gentry_resistance": 5,
       "military_pressure": 80,
       "status": "皮岛孤悬海上，牵制后金侧翼，也依赖朝鲜与登莱接济。",
@@ -496,8 +495,9 @@
         "salt_tax": 0,
         "commerce_tax": 0,
         "corruption": 62,
-        "grain_output": 15,
-        "tian_fu_li": 150
+        "grain_output": 75,
+        "tian_fu_li": 150,
+        "grain_stock": 6
       },
       "controlled_by": "ming"
     },
@@ -513,7 +513,6 @@
       "registered_land": 650,
       "hidden_land": 170,
       "tax_per_turn": 0,
-      "grain_security": 120,
       "gentry_resistance": 15,
       "military_pressure": 88,
       "status": "后金根本地，八旗贵族、包衣、辽人降户与工匠聚集。",
@@ -524,7 +523,9 @@
         "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 0,
-        "corruption": 35
+        "corruption": 35,
+        "grain_output": 520,
+        "grain_stock": 120
       },
       "controlled_by": "houjin",
       "on_restore": {
@@ -538,7 +539,6 @@
         "registered_land": 30,
         "hidden_land": 25,
         "tax_per_turn": 0,
-        "grain_security": 80,
         "gentry_resistance": 18,
         "military_pressure": 60,
         "status": "复设建州卫，羁縻女真余部，明军驻守新堡，屯田未复、辽饷负担更重。",
@@ -549,8 +549,10 @@
           "liao_xiang": 0,
           "salt_tax": 0,
           "commerce_tax": 0,
-          "corruption": 35
-        }
+          "corruption": 35,
+          "grain_output": 270,
+          "grain_stock": 80
+        },
       }
     },
     {
@@ -565,7 +567,6 @@
       "registered_land": 900,
       "hidden_land": 270,
       "tax_per_turn": 1,
-      "grain_security": 150,
       "gentry_resistance": 22,
       "military_pressure": 82,
       "status": "后金经营辽沈的汉民与匠户核心区，也是铸炮、通译、招降明边的节点。",
@@ -576,7 +577,9 @@
         "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 1,
-        "corruption": 42
+        "corruption": 42,
+        "grain_output": 760,
+        "grain_stock": 150
       },
       "controlled_by": "houjin",
       "on_restore": {
@@ -590,7 +593,6 @@
         "registered_land": 180,
         "hidden_land": 30,
         "tax_per_turn": 6,
-        "grain_security": 240,
         "gentry_resistance": 30,
         "military_pressure": 55,
         "status": "复设辽东都司，招抚辽人流民复业，屯田渐起，兵燹疮痍未平，辽饷压力仍重。",
@@ -601,8 +603,10 @@
           "liao_xiang": 6,
           "salt_tax": 0,
           "commerce_tax": 4,
-          "corruption": 40
-        }
+          "corruption": 40,
+          "grain_output": 520,
+          "grain_stock": 240
+        },
       }
     },
     {
@@ -614,21 +618,22 @@
       "unrest": 42,
       "natural_disaster": "草场寒旱",
       "human_disaster": "诸部离心、后金压迫",
-      "registered_land": 0,
-      "hidden_land": 0,
+      "registered_land": 120,
+      "hidden_land": 30,
       "tax_per_turn": 0,
-      "grain_security": 60,
       "gentry_resistance": 10,
       "military_pressure": 60,
       "status": "林丹汗试图维系统合，诸部在明朝赏市与后金兵锋之间摇摆。",
       "fiscal": {
         "huang_tian": 0,
         "wang_tian": 0,
-        "guan_min_tian": 0,
+        "guan_min_tian": 120,
         "liao_xiang": 0,
         "salt_tax": 0,
-        "commerce_tax": 0,
-        "corruption": 38
+        "commerce_tax": 1,
+        "corruption": 38,
+        "grain_output": 390,
+        "grain_stock": 60
       },
       "controlled_by": "mongol",
       "on_restore": {
@@ -639,22 +644,23 @@
         "unrest": 38,
         "natural_disaster": "草场寒旱",
         "human_disaster": "诸部内附、岁赐市赏银压国库",
-        "registered_land": 0,
-        "hidden_land": 0,
+        "registered_land": 80,
+        "hidden_land": 20,
         "tax_per_turn": 0,
-        "grain_security": 80,
         "gentry_resistance": 12,
         "military_pressure": 50,
         "status": "察哈尔诸部内附，照俺答故事开互市、岁赐市赏银，羁縻不直辖。",
         "fiscal": {
           "huang_tian": 0,
           "wang_tian": 0,
-          "guan_min_tian": 0,
+          "guan_min_tian": 80,
           "liao_xiang": 0,
           "salt_tax": 0,
           "commerce_tax": 3,
-          "corruption": 30
-        }
+          "corruption": 30,
+          "grain_output": 290,
+          "grain_stock": 80
+        },
       }
     },
     {
@@ -669,7 +675,6 @@
       "registered_land": 3600,
       "hidden_land": 1570,
       "tax_per_turn": 0,
-      "grain_security": 690,
       "gentry_resistance": 45,
       "military_pressure": 62,
       "status": "丁卯之役后被迫与后金缔盟，朝廷仍暗中倾明，登莱与皮岛补给仰赖其态度。",
@@ -680,7 +685,9 @@
         "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 1,
-        "corruption": 45
+        "corruption": 45,
+        "grain_output": 2600,
+        "grain_stock": 690
       },
       "controlled_by": "korea",
       "on_restore": {
@@ -694,7 +701,6 @@
         "registered_land": 80,
         "hidden_land": 200,
         "tax_per_turn": 2,
-        "grain_security": 500,
         "gentry_resistance": 70,
         "military_pressure": 55,
         "status": "废李氏，比照辽东设朝鲜都司或承宣司，编户征贡，李朝旧臣未平、士族抗征。",
@@ -705,8 +711,10 @@
           "liao_xiang": 0,
           "salt_tax": 0,
           "commerce_tax": 2,
-          "corruption": 50
-        }
+          "corruption": 50,
+          "grain_output": 1800,
+          "grain_stock": 500
+        },
       }
     },
     {
@@ -721,7 +729,6 @@
       "registered_land": 50,
       "hidden_land": 10,
       "tax_per_turn": 0,
-      "grain_security": 30,
       "gentry_resistance": 5,
       "military_pressure": 55,
       "status": "女真、索伦、野人诸部散处，后金影响上升但控制不稳。",
@@ -732,7 +739,9 @@
         "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 0,
-        "corruption": 35
+        "corruption": 35,
+        "grain_output": 190,
+        "grain_stock": 30
       },
       "controlled_by": "houjin",
       "on_restore": {
@@ -746,7 +755,6 @@
         "registered_land": 5,
         "hidden_land": 0,
         "tax_per_turn": 0,
-        "grain_security": 40,
         "gentry_resistance": 5,
         "military_pressure": 45,
         "status": "复奴儿干都司羁縻旧制，女真索伦诸部纳贡通互市。",
@@ -757,8 +765,10 @@
           "liao_xiang": 0,
           "salt_tax": 0,
           "commerce_tax": 0,
-          "corruption": 30
-        }
+          "corruption": 30,
+          "grain_output": 135,
+          "grain_stock": 40
+        },
       }
     },
     {
@@ -770,21 +780,22 @@
       "unrest": 48,
       "natural_disaster": "寒旱与雪灾",
       "human_disaster": "部众离散、后金与察哈尔争盟",
-      "registered_land": 0,
-      "hidden_land": 0,
+      "registered_land": 80,
+      "hidden_land": 20,
       "tax_per_turn": 0,
-      "grain_security": 45,
       "gentry_resistance": 8,
       "military_pressure": 48,
       "status": "漠北诸部距明边较远，仍受察哈尔名义声势、后金招抚与互市利益牵动。",
       "fiscal": {
         "huang_tian": 0,
         "wang_tian": 0,
-        "guan_min_tian": 0,
+        "guan_min_tian": 80,
         "liao_xiang": 0,
         "salt_tax": 0,
-        "commerce_tax": 0,
-        "corruption": 25
+        "commerce_tax": 1,
+        "corruption": 25,
+        "grain_output": 285,
+        "grain_stock": 45
       },
       "controlled_by": "mongol"
     },
@@ -797,21 +808,22 @@
       "unrest": 46,
       "natural_disaster": "荒漠寒暑",
       "human_disaster": "绿洲城邦与草原部族互相牵制",
-      "registered_land": 0,
-      "hidden_land": 0,
+      "registered_land": 280,
+      "hidden_land": 60,
       "tax_per_turn": 0,
-      "grain_security": 55,
       "gentry_resistance": 8,
       "military_pressure": 35,
       "status": "哈密以西诸部与绿洲贸易尚可入贡，但距离中枢遥远，更多影响西北互市和边情。",
       "fiscal": {
         "huang_tian": 0,
         "wang_tian": 0,
-        "guan_min_tian": 0,
+        "guan_min_tian": 280,
         "liao_xiang": 0,
         "salt_tax": 0,
-        "commerce_tax": 0,
-        "corruption": 20
+        "commerce_tax": 1,
+        "corruption": 20,
+        "grain_output": 250,
+        "grain_stock": 55
       },
       "controlled_by": "mongol"
     },
@@ -824,21 +836,22 @@
       "unrest": 38,
       "natural_disaster": "高原寒瘠",
       "human_disaster": "寺院、部族与青海蒙古势力交错",
-      "registered_land": 0,
-      "hidden_land": 0,
+      "registered_land": 360,
+      "hidden_land": 80,
       "tax_per_turn": 0,
-      "grain_security": 65,
       "gentry_resistance": 12,
       "military_pressure": 32,
       "status": "明廷册封与茶马旧制仍有名义影响，实际由乌思藏、青海诸部和寺院网络分散掌握。",
       "fiscal": {
         "huang_tian": 0,
         "wang_tian": 0,
-        "guan_min_tian": 0,
+        "guan_min_tian": 360,
         "liao_xiang": 0,
         "salt_tax": 0,
-        "commerce_tax": 0,
-        "corruption": 22
+        "commerce_tax": 1,
+        "corruption": 22,
+        "grain_output": 310,
+        "grain_stock": 65
       },
       "controlled_by": "tibet"
     },
@@ -851,21 +864,22 @@
       "unrest": 52,
       "natural_disaster": "极寒山林",
       "human_disaster": "野人女真、索伦诸部受后金征发",
-      "registered_land": 0,
-      "hidden_land": 0,
+      "registered_land": 30,
+      "hidden_land": 10,
       "tax_per_turn": 0,
-      "grain_security": 28,
       "gentry_resistance": 5,
       "military_pressure": 46,
       "status": "黑龙江以北诸部散处山林河谷，明廷旧羁縻名义渐远，后金势力正在渗入。",
       "fiscal": {
         "huang_tian": 0,
         "wang_tian": 0,
-        "guan_min_tian": 0,
+        "guan_min_tian": 30,
         "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 0,
-        "corruption": 25
+        "corruption": 25,
+        "grain_output": 120,
+        "grain_stock": 28
       },
       "controlled_by": "houjin"
     },
@@ -878,21 +892,22 @@
       "unrest": 20,
       "natural_disaster": "海国风灾",
       "human_disaster": "海禁趋严、天主教禁令加深",
-      "registered_land": 0,
-      "hidden_land": 0,
-      "tax_per_turn": 0,
-      "grain_security": 850,
+      "registered_land": 7600,
+      "hidden_land": 2200,
+      "tax_per_turn": 8,
       "gentry_resistance": 45,
       "military_pressure": 28,
       "status": "江户幕府秩序趋稳，对明朝多经长崎、平户和海商间接往来，仍影响东海贸易。",
       "fiscal": {
         "huang_tian": 0,
         "wang_tian": 0,
-        "guan_min_tian": 0,
+        "guan_min_tian": 7600,
         "liao_xiang": 0,
-        "salt_tax": 0,
-        "commerce_tax": 0,
-        "corruption": 18
+        "salt_tax": 2,
+        "commerce_tax": 8,
+        "corruption": 18,
+        "grain_output": 6500,
+        "grain_stock": 850
       },
       "controlled_by": "japan"
     },
@@ -905,21 +920,22 @@
       "unrest": 36,
       "natural_disaster": "瘴疠水患",
       "human_disaster": "后黎名义、郑阮分争",
-      "registered_land": 0,
-      "hidden_land": 0,
-      "tax_per_turn": 0,
-      "grain_security": 420,
+      "registered_land": 3600,
+      "hidden_land": 900,
+      "tax_per_turn": 3,
       "gentry_resistance": 38,
       "military_pressure": 34,
       "status": "安南仍在明朝册封秩序之外缘，后黎虚位、郑阮南北分治，边贸和贡道时断时续。",
       "fiscal": {
         "huang_tian": 0,
         "wang_tian": 0,
-        "guan_min_tian": 0,
+        "guan_min_tian": 3600,
         "liao_xiang": 0,
-        "salt_tax": 0,
-        "commerce_tax": 0,
-        "corruption": 30
+        "salt_tax": 1,
+        "commerce_tax": 3,
+        "corruption": 30,
+        "grain_output": 2600,
+        "grain_stock": 420
       },
       "controlled_by": "annam"
     },
@@ -932,21 +948,22 @@
       "unrest": 45,
       "natural_disaster": "瘴疠台风",
       "human_disaster": "荷兰红毛据大员，西班牙据鸡笼淡水；汉人渔民海商杂处",
-      "registered_land": 0,
+      "registered_land": 80,
       "hidden_land": 120,
       "tax_per_turn": 0,
-      "grain_security": 40,
       "gentry_resistance": 10,
       "military_pressure": 50,
       "status": "荷兰东印度公司 1624 据大员筑热兰遮城，1626 西班牙占鸡笼淡水。原住民部落散处，颜思齐、郑芝龙旧据笨港，海商走私不绝。明廷视为化外，水师止于澎湖。",
       "fiscal": {
         "huang_tian": 0,
         "wang_tian": 0,
-        "guan_min_tian": 0,
+        "guan_min_tian": 80,
         "liao_xiang": 0,
         "salt_tax": 0,
-        "commerce_tax": 0,
-        "corruption": 0
+        "commerce_tax": 1,
+        "corruption": 0,
+        "grain_output": 90,
+        "grain_stock": 40
       },
       "controlled_by": "dutch",
       "on_restore": {
@@ -960,7 +977,6 @@
         "registered_land": 35,
         "hidden_land": 20,
         "tax_per_turn": 2,
-        "grain_security": 60,
         "gentry_resistance": 15,
         "military_pressure": 45,
         "status": "驱红毛、纳郑氏，设澎湖巡检司、台员道，初编户齐民，南洋互市归大明。",
@@ -971,8 +987,10 @@
           "liao_xiang": 0,
           "salt_tax": 2,
           "commerce_tax": 4,
-          "corruption": 30
-        }
+          "corruption": 30,
+          "grain_output": 100,
+          "grain_stock": 60
+        },
       }
     }
   ]

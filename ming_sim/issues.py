@@ -468,7 +468,13 @@ def _eval_gate_key(key: str, metrics: Dict[str, int], db: GameDB) -> Optional[in
     for cid in ids:
         row = None
         if table == "region":
-            row = db.conn.execute(f"SELECT {field} FROM regions WHERE id = ?", (cid,)).fetchone()
+            if field in ("grain_output", "grain_stock"):
+                row = db.conn.execute(
+                    f"SELECT json_extract(fiscal,'$.{field}') FROM regions WHERE id = ?",
+                    (cid,),
+                ).fetchone()
+            else:
+                row = db.conn.execute(f"SELECT {field} FROM regions WHERE id = ?", (cid,)).fetchone()
         elif table == "army":
             row = db.conn.execute(f"SELECT {field} FROM armies WHERE id = ?", (cid,)).fetchone()
         elif table == "building":

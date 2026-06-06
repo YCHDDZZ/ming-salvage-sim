@@ -170,8 +170,8 @@
       "毕自严",
       "徐光启"
     ],
-    "resolve_condition": "陕西地方民心 >= 60、动乱值 <= 30、粮食安全 >= 45，且驻陕明军士气 >= 50；连续 2 个月无成股流寇攻州县即可结案。",
-    "fail_condition": "陕西动乱值 >= 85 且地方民心 <= 30，或粮食安全 <= 20；若万人以上流寇攻破州县、与晋豫流寇合流、驿卒大批投寇任一发生，立即失败。",
+    "resolve_condition": "陕西地方民心 >= 60、动乱值 <= 30，且驻陕明军士气 >= 50；连续 2 个月无成股流寇攻州县即可结案。",
+    "fail_condition": "陕西动乱值 >= 85 且地方民心 <= 30；若万人以上流寇攻破州县、与晋豫流寇合流、驿卒大批投寇任一发生，立即失败。",
     "trigger_gate": {},
     "auto_trigger": true,
     "bar_value": 30,
@@ -260,7 +260,7 @@
     "resolve_condition": "湖广漕粮足额抵京、米价继续走低，养京畿与边镇过冬",
     "fail_condition": "丰收余粮被盗匪劫掠或大户囤积，漕运未济，京中米价反涨",
     "trigger_gate": {
-      "region.huguang.grain_security": ">=80",
+      "region.huguang.grain_output": ">=6000",
       "民心": ">=42"
     },
     "auto_trigger": true

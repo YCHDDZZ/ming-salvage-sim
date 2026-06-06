@@ -187,7 +187,8 @@ const createWindow = async (port) => {
     mainWindow = null;
   });
 
-  await mainWindow.loadURL(`http://${host}:${port}`);
+  const apiBase = `http://${host}:${port}`;
+  await mainWindow.loadURL(`${apiBase}?api=${encodeURIComponent(apiBase)}`);
 };
 
 app.whenReady().then(async () => {

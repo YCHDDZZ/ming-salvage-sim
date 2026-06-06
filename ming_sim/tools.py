@@ -567,15 +567,17 @@ def build_board_query_tools(context: CourtContext):
         return context.db.region_report(limit=8)
 
     def inspect_region(region: str) -> str:
-        """查某一地区详细数值：public_support/unrest/grain_security/gentry_resistance/
+        """查某一地区详细数值：public_support/unrest/grain_output/grain_stock/gentry_resistance/
         military_pressure/corruption/population/registered_land/hidden_land/tax_per_turn/status。
         region 可传地区名（如"陕西"）或 region_id（如"shaanxi"），两者均支持。"""
         try:
             return context.db.region_detail(region)
         except ValueError:
             row = context.db.conn.execute(
-                "SELECT id,name,public_support,unrest,grain_security,gentry_resistance,"
+                "SELECT id,name,public_support,unrest,gentry_resistance,"
                 "military_pressure,json_extract(fiscal,'$.corruption') as corruption,"
+                "json_extract(fiscal,'$.grain_output') as grain_output,"
+                "json_extract(fiscal,'$.grain_stock') as grain_stock,"
                 "population,registered_land,hidden_land,tax_per_turn,status "
                 "FROM regions WHERE id=?", (region,)
             ).fetchone()
@@ -777,7 +779,7 @@ def build_extractor_tools(context: CourtContext):
                             key="农民"(全国)或"农民@shaanxi"(省级切片)
                             value={"satisfaction":N,"leverage":N}（可只写一个）
         region_delta        地区数值变化 {region_id: {字段:增量}}
-                            合法字段：public_support/unrest/grain_security/gentry_resistance/
+                            合法字段：public_support/unrest/grain_output/grain_stock/gentry_resistance/
                             military_pressure/corruption/population/registered_land/
                             hidden_land/tax_per_turn/natural_disaster/human_disaster/status
                             减人口写人口，禁止写军队人数
@@ -839,7 +841,7 @@ def build_extractor_tools(context: CourtContext):
           "economy_moves": [{"account":"国库","delta":-15,"category":"赈灾","reason":"陕西赈粮"}],
           "faction_delta": {"阉党": -5, "东林": 4},
           "class_delta": {"农民@shaanxi": {"satisfaction": -6, "leverage": 5}},
-          "region_delta": {"shaanxi": {"unrest": 5, "grain_security": -3}},
+          "region_delta": {"shaanxi": {"unrest": 5, "public_support": -3}},
           "army_delta": {"guanning": {"morale": -3, "loyalty": -2}},
           "power_updates": {"houjin": {"威望": -4, "实力": -3, "经济": -2}},
           "world_advance": {"后金": "敌对", "蒙古": "摇摆", "朝鲜": "倾明"},
