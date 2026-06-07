@@ -68,7 +68,8 @@
       "birth_year": 1559,
       "historical_death_year": 1637,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "shanxi"
     },
     {
       "name": "张瑞图",
@@ -94,7 +95,8 @@
       "birth_year": 1570,
       "historical_death_year": 1641,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "来宗道",
@@ -119,7 +121,8 @@
       "birth_year": 1560,
       "historical_death_year": 1632,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "施凤来",
@@ -145,7 +148,8 @@
       "birth_year": 1563,
       "historical_death_year": 1642,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "黄立极",
@@ -171,7 +175,8 @@
       "birth_year": 1568,
       "historical_death_year": 1637,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "王绍徽",
@@ -197,7 +202,8 @@
       "birth_year": 1564,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "毕自严",
@@ -224,7 +230,8 @@
       "birth_year": 1569,
       "historical_death_year": 1638,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "nanzhili"
     },
     {
       "name": "杨嗣昌",
@@ -249,7 +256,8 @@
       "birth_year": 1588,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "温体仁",
@@ -275,7 +283,8 @@
       "birth_year": 1573,
       "historical_death_year": 1638,
       "historical_death_month": 7,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "钱龙锡",
@@ -300,7 +309,8 @@
       "birth_year": 1579,
       "historical_death_year": 1645,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "nanzhili"
     },
     {
       "name": "刘鸿训",
@@ -325,7 +335,8 @@
       "birth_year": 1565,
       "historical_death_year": 1634,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "korea"
     },
     {
       "name": "钱谦益",
@@ -350,7 +361,8 @@
       "birth_year": 1582,
       "historical_death_year": 1664,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "nanzhili"
     },
     {
       "name": "李标",
@@ -375,7 +387,8 @@
       "birth_year": 1571,
       "historical_death_year": 1642,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "孙承宗",
@@ -402,7 +415,8 @@
       "birth_year": 1563,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "崔呈秀",
@@ -429,7 +443,8 @@
       "birth_year": 1584,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "王在晋",
@@ -454,7 +469,8 @@
       "birth_year": 1567,
       "historical_death_year": 1643,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "nanzhili"
     },
     {
       "name": "徐光启",
@@ -480,7 +496,8 @@
       "birth_year": 1562,
       "historical_death_year": 1633,
       "historical_death_month": 10,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "nanzhili"
     },
     {
       "name": "袁可立",
@@ -505,7 +522,8 @@
       "birth_year": 1562,
       "historical_death_year": 1633,
       "historical_death_month": 10,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "henan"
     },
     {
       "name": "周延儒",
@@ -530,7 +548,8 @@
       "birth_year": 1593,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "nanzhili"
     },
     {
       "name": "倪元璐",
@@ -555,7 +574,8 @@
       "birth_year": 1593,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "黄道周",
@@ -581,7 +601,8 @@
       "birth_year": 1585,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "曹化淳",
@@ -607,7 +628,8 @@
       "birth_year": 1589,
       "historical_death_year": 1659,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "王体乾",
@@ -632,7 +654,8 @@
       "birth_year": 1571,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "王承恩",
@@ -658,7 +681,8 @@
       "birth_year": 1610,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "魏忠贤",
@@ -686,7 +710,8 @@
       "birth_year": 1568,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "田尔耕",
@@ -714,7 +739,8 @@
       "birth_year": 1565,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "许显纯",
@@ -739,7 +765,8 @@
       "birth_year": 1572,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "李若琏",
@@ -764,7 +791,8 @@
       "birth_year": 1598,
       "historical_death_year": 1644,
       "historical_death_month": 3,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "客氏",
@@ -789,7 +817,8 @@
       "birth_year": 1588,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "袁崇焕",
@@ -815,7 +844,8 @@
       "birth_year": 1584,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "guangdong"
     },
     {
       "name": "曹文诏",
@@ -840,7 +870,8 @@
       "birth_year": 1590,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "liaodong"
     },
     {
       "name": "祖大寿",
@@ -866,7 +897,8 @@
       "birth_year": 1579,
       "historical_death_year": 1656,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "liaodong"
     },
     {
       "name": "满桂",
@@ -891,7 +923,8 @@
       "birth_year": 1594,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "shanxi"
     },
     {
       "name": "赵率教",
@@ -916,7 +949,8 @@
       "birth_year": 1569,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "liaodong"
     },
     {
       "name": "王之臣",
@@ -941,7 +975,8 @@
       "birth_year": 1570,
       "historical_death_year": 1631,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "liaodong"
     },
     {
       "name": "毛文龙",
@@ -967,7 +1002,8 @@
       "birth_year": 1576,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "dongjiang_area"
     },
     {
       "name": "阎鸣泰",
@@ -992,7 +1028,8 @@
       "birth_year": 1568,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "liaodong"
     },
     {
       "name": "洪承畴",
@@ -1017,7 +1054,8 @@
       "birth_year": 1593,
       "historical_death_year": 1665,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "shaanxi"
     },
     {
       "name": "孙传庭",
@@ -1042,7 +1080,8 @@
       "birth_year": 1593,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "henan"
     },
     {
       "name": "卢象升",
@@ -1067,7 +1106,8 @@
       "birth_year": 1600,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "史可法",
@@ -1091,7 +1131,8 @@
       "birth_year": 1601,
       "historical_death_year": 0,
       "historical_death_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "nanzhili"
     },
     {
       "name": "周皇后",
@@ -1121,7 +1162,8 @@
       "summary": "皇后，端庄贤德，母仪天下，时常规谏圣上。",
       "debut_year": 0,
       "debut_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "周贵人",
@@ -1149,7 +1191,8 @@
       "summary": "贵人，精明干练，善于周旋，有时为娘家打探消息。",
       "debut_year": 0,
       "debut_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "田贵妃",
@@ -1178,7 +1221,8 @@
       "summary": "贵妃，娇媚善宠，专擅圣心，善歌舞，偶为外戚进言。",
       "debut_year": 0,
       "debut_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "袁贵妃",
@@ -1206,7 +1250,8 @@
       "summary": "贵妃，沉静内敛，守分安命，不争宠，深得崇祯敬重。",
       "debut_year": 0,
       "debut_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "慧妃",
@@ -1234,7 +1279,8 @@
       "summary": "妃，年轻纯真，侍奉温柔，无争宠之心。",
       "debut_year": 0,
       "debut_month": 0,
-      "power_id": "ming"
+      "power_id": "ming",
+      "location": "beizhili"
     },
     {
       "name": "皇太极",
