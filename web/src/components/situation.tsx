@@ -102,7 +102,7 @@ export function SituationDrawer({ open, issues, closedIssues, onClose, maxDecree
   onChanged?: () => void | Promise<void>;
 }) {
   const { active, longTerm, nearTerm } = groupIssues(issues);
-  const manualCount = active.filter((i) => i.is_manual).length;
+  const decreeIssueCount = active.filter((i) => i.origin_kind === "decree").length;
   const [editor, setEditor] = React.useState<{ mode: "create" } | { mode: "edit"; issue: Issue } | null>(null);
   return (
     <>
@@ -117,18 +117,18 @@ export function SituationDrawer({ open, issues, closedIssues, onClose, maxDecree
         </div>
         <div className="situation-drawer-body">
           <div className="situation-manual-bar">
-            <span className="situation-manual-count">手动局势 {manualCount} / {maxDecreeIssues}</span>
+            <span className="situation-manual-count">decree 局势 {decreeIssueCount} / {maxDecreeIssues}</span>
             <button
               type="button"
               className="situation-manual-add"
-              disabled={manualCount >= maxDecreeIssues}
-              title={manualCount >= maxDecreeIssues ? "已达上限，可在主菜单游戏设置调高" : "手动新建一条局势"}
+              disabled={decreeIssueCount >= maxDecreeIssues}
+              title={decreeIssueCount >= maxDecreeIssues ? "已达上限，可在主菜单游戏设置调高" : "手动新建一条局势"}
               onClick={() => setEditor({ mode: "create" })}
             >
               ＋ 新建局势
             </button>
           </div>
-          {manualCount >= maxDecreeIssues ? (
+          {decreeIssueCount >= maxDecreeIssues ? (
             <p className="situation-manual-hint">已达上限（{maxDecreeIssues}）。可在主菜单「游戏设置」调高，但会增加推演 token 消耗。</p>
           ) : null}
           {closedIssues.length ? (

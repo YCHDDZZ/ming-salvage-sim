@@ -217,6 +217,8 @@ export type Issue = {
   ongoing_text: string;
   effect_on_resolve: Record<string, number>;
   effect_on_fail: Record<string, number>;
+  origin_kind?: string;
+  status?: string;
   is_manual?: boolean;
   duration_turns?: number;
   goal?: string;
@@ -315,6 +317,7 @@ export type GameState = {
   treasury: string;
   issues: Issue[];
   max_decree_issues?: number;
+  issue_log_limit?: number;
   legacies: Legacy[];
   closed_this_turn: ClosedIssue[];
   budget: Budget;
@@ -467,7 +470,12 @@ export type MenuStatus = {
   saves: MenuSave[];
   campaigns?: MenuCampaign[];
   current_campaign?: string;
-  game_settings?: { hitl_min_decisions: number; court_chat_debate_rounds?: number; max_decree_issues?: number };
+  game_settings?: {
+    hitl_min_decisions: number;
+    court_chat_debate_rounds?: number;
+    max_decree_issues?: number;
+    issue_log_limit?: number;
+  };
   llm: {
     base_url: string;
     model: string;

@@ -17,7 +17,8 @@ RUNTIME_GAME_PATH = user_data_path("runtime_game.json")
 GAME_SETTINGS_DEFAULTS = {
     "hitl_min_decisions": 1,  # 每回合 simulator 最多产出的重大决策点数（0=关闭 HITL 注入）
     "court_chat_debate_rounds": 3,  # 朝会聊天室未形成结论前最多驱动几轮 ReAct 交锋。
-    "max_decree_issues": 10,  # 玩家手动 decree 局势同时进行上限。调高会增加推演 token 消耗。
+    "max_decree_issues": 10,  # decree 来源 active 局势同时进行上限。调高会增加推演 token 消耗。
+    "issue_log_limit": 6,  # 每条 active 局势注入推演的最近推进日志条数。
 }
 
 
@@ -181,6 +182,10 @@ def load_runtime_game() -> Dict[str, object]:
         out["max_decree_issues"] = max(1, min(30, int(data.get("max_decree_issues", out["max_decree_issues"]))))
     except (TypeError, ValueError):
         pass
+    try:
+        out["issue_log_limit"] = max(0, min(50, int(data.get("issue_log_limit", out["issue_log_limit"]))))
+    except (TypeError, ValueError):
+        pass
     return out
 
 
@@ -188,6 +193,7 @@ def save_runtime_game(
     hitl_min_decisions: int,
     court_chat_debate_rounds: int = 3,
     max_decree_issues: int = 10,
+    issue_log_limit: int = 6,
 ) -> Dict[str, object]:
     """写 data/runtime_game.json。各项 clamp 到合法区间。返回落盘后的设置。"""
     os.makedirs(os.path.dirname(RUNTIME_GAME_PATH), exist_ok=True)
@@ -195,6 +201,7 @@ def save_runtime_game(
         "hitl_min_decisions": max(0, min(5, int(hitl_min_decisions))),
         "court_chat_debate_rounds": max(1, min(8, int(court_chat_debate_rounds))),
         "max_decree_issues": max(1, min(30, int(max_decree_issues))),
+        "issue_log_limit": max(0, min(50, int(issue_log_limit))),
     }
     with open(RUNTIME_GAME_PATH, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=2)

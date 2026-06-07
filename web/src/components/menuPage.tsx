@@ -223,7 +223,12 @@ export function GameSettingsModal({
   onClose,
   onSaved,
 }: {
-  initial?: { hitl_min_decisions: number; court_chat_debate_rounds?: number; max_decree_issues?: number };
+  initial?: {
+    hitl_min_decisions: number;
+    court_chat_debate_rounds?: number;
+    max_decree_issues?: number;
+    issue_log_limit?: number;
+  };
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -235,6 +240,9 @@ export function GameSettingsModal({
   );
   const [maxDecreeIssues, setMaxDecreeIssues] = React.useState<number>(
     initial?.max_decree_issues ?? 10
+  );
+  const [issueLogLimit, setIssueLogLimit] = React.useState<number>(
+    initial?.issue_log_limit ?? 6
   );
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState("");
@@ -250,6 +258,7 @@ export function GameSettingsModal({
           hitl_min_decisions: minDecisions,
           court_chat_debate_rounds: courtChatDebateRounds,
           max_decree_issues: maxDecreeIssues,
+          issue_log_limit: issueLogLimit,
         }),
       });
       await onSaved();
@@ -301,10 +310,10 @@ export function GameSettingsModal({
           </select>
         </label>
         <label>
-          手动局势上限{" "}
+          decree 局势上限{" "}
           <small className="menu-hint">
-            （皇帝可手动新建/管理的 decree 局势同时进行条数上限。默认 10。
-            <b>调高会让月末推演每月多带这些局势进盘面叙述，token 消耗随之增加。</b>）
+            （皇帝手动新建与大模型从诏书抽取的 decree 来源局势，共用此 active 总上限。默认 10。
+            <b>调高会让月末推演多带局势进盘面叙述，token 消耗随之增加。</b>）
           </small>
           <select
             value={maxDecreeIssues}
@@ -315,6 +324,23 @@ export function GameSettingsModal({
             <option value={20}>20 · 较多（token ↑↑）</option>
             <option value={25}>25 · 很多（token ↑↑↑）</option>
             <option value={30}>30 · 上限（token 大幅增加）</option>
+          </select>
+        </label>
+        <label>
+          局势日志注入条数{" "}
+          <small className="menu-hint">
+            （每条 active 局势最多带最近几条推进日志进月末推演。0=不带日志；默认 6。）
+          </small>
+          <select
+            value={issueLogLimit}
+            onChange={(e) => setIssueLogLimit(Number(e.target.value))}
+          >
+            <option value={0}>0 · 不带推进日志</option>
+            <option value={3}>3 · 最近 3 条</option>
+            <option value={6}>6 · 默认</option>
+            <option value={10}>10 · 较完整</option>
+            <option value={20}>20 · 长历史</option>
+            <option value={50}>50 · 上限</option>
           </select>
         </label>
         <div className="menu-modal-actions">

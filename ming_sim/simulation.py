@@ -82,6 +82,15 @@ def _load_hitl_min_decisions() -> int:
         return 1
 
 
+def _load_issue_log_limit() -> int:
+    """全局玩法设置：每条 active 局势注入推演的最近推进日志条数（0=不带日志）。"""
+    try:
+        from ming_sim.llm_config import load_runtime_game
+        return int(load_runtime_game().get("issue_log_limit", 6))
+    except Exception:
+        return 6
+
+
 TOP_LEVEL_ALIASES = {
     "国势变化": "metric_delta",
     "钱粮收支": "economy_moves",
@@ -315,8 +324,9 @@ def build_simulator_payload(
     secret_orders: Optional[List[Dict[str, object]]] = None,
 ) -> Dict[str, object]:
     active = db.list_active_issues()
+    issue_log_limit = _load_issue_log_limit()
     issues_payload = [
-        issue_to_payload(row, db.list_issue_advances(int(row["id"])))
+        issue_to_payload(row, db.list_issue_advances(int(row["id"]))[-issue_log_limit:] if issue_log_limit > 0 else [])
         for row in active
     ]
     # 帝国修正不进 simulator payload：它是纯机械的百分比修正符，由落账层自动放大/缩小增量，不进叙事。

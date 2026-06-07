@@ -808,12 +808,12 @@ export function EdictModal({
   const [decreeDraft, setDecreeDraft] = React.useState(decree);
   const [dialogDirectiveId, setDialogDirectiveId] = React.useState<number | null>(null);
   const [issueEditorOpen, setIssueEditorOpen] = React.useState(false);
-  const manualIssueCount = React.useMemo(
-    () => (state.issues || []).filter((i) => i.is_manual && (i.kind === "situation" || i.kind === "initiative")).length,
+  const decreeIssueCount = React.useMemo(
+    () => (state.issues || []).filter((i) => i.origin_kind === "decree" && (i.kind === "situation" || i.kind === "initiative")).length,
     [state.issues],
   );
-  const maxManualIssues = state.max_decree_issues ?? 10;
-  const manualIssueFull = manualIssueCount >= maxManualIssues;
+  const maxDecreeIssues = state.max_decree_issues ?? 10;
+  const decreeIssueFull = decreeIssueCount >= maxDecreeIssues;
   const dialogDirective = allDirectives.find((d) => d.id === dialogDirectiveId) || null;
   const openDirectiveDialog = (directive: Directive) => {
     setDialogDirectiveId(directive.id);
@@ -964,12 +964,12 @@ export function EdictModal({
               type="button"
               className="desk-add-issue-btn"
               onClick={() => setIssueEditorOpen(true)}
-              disabled={!!busy || manualIssueFull}
-              title={manualIssueFull ? `手动局势已达上限（${maxManualIssues}），可在主菜单游戏设置调高` : "另立一条可追踪的手动局势"}
+              disabled={!!busy || decreeIssueFull}
+              title={decreeIssueFull ? `decree 局势已达上限（${maxDecreeIssues}），可在主菜单游戏设置调高` : "另立一条可追踪的手动局势"}
             >
               <Landmark size={14} />＋ 新建局势
             </button>
-            <small className="desk-manual-issue-hint">手动局势 {manualIssueCount} / {maxManualIssues} · 仅记目标，无成功/失败奖励</small>
+            <small className="desk-manual-issue-hint">decree 局势 {decreeIssueCount} / {maxDecreeIssues} · 手动新增仅记目标</small>
           </div>
           {busy && <div className="busy-line"><Loader2 size={15} />{busy}...</div>}
           {error && <div className="error-line" role="alert">{error}</div>}

@@ -168,6 +168,12 @@ class _IssuesMixin:
             "SELECT COUNT(*) FROM issues WHERE status='active' AND is_manual=1"
         ).fetchone()[0])
 
+    def count_active_decree_issues(self) -> int:
+        """当前进行中的 decree 来源局势条数（手动 + LLM 从诏书抽取）。"""
+        return int(self.conn.execute(
+            "SELECT COUNT(*) FROM issues WHERE status='active' AND origin_kind='decree'"
+        ).fetchone()[0])
+
     def get_manual_issue(self, issue_id: int) -> sqlite3.Row | None:
         """取一条手动局势（任意状态）；非手动返回 None。"""
         row = self.conn.execute(

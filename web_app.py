@@ -1152,6 +1152,7 @@ class WebGame:
             "treasury": self.db.treasury_report(self.state),
             "issues": self.issue_payloads(),
             "max_decree_issues": int(load_runtime_game().get("max_decree_issues", 10)),
+            "issue_log_limit": int(load_runtime_game().get("issue_log_limit", 6)),
             "legacies": self.legacies_payload(),
             "closed_this_turn": self.closed_this_turn_payloads(),
             "budget": self.budget_payload(),
@@ -2360,8 +2361,10 @@ class GameSettingsRequest(BaseModel):
     hitl_min_decisions: int = 1
     # 朝会聊天室 ReAct 交锋轮数，未形成结论前继续驱动 agent；默认 3。
     court_chat_debate_rounds: int = 3
-    # 玩家手动 decree 局势同时进行上限；默认 10，调高增加推演 token 消耗。
+    # decree 来源 active 局势同时进行上限；默认 10，调高增加推演 token 消耗。
     max_decree_issues: int = 10
+    # 每条 active 局势注入推演的最近推进日志条数。0=不带推进日志。
+    issue_log_limit: int = 6
 
 
 @app.get("/api/menu/game_settings")
@@ -2374,7 +2377,10 @@ async def api_menu_game_settings() -> Dict[str, Any]:
 async def api_menu_save_game_settings(request: GameSettingsRequest) -> Dict[str, Any]:
     """保存全局玩法设置（runtime_game.json）。立即对下一回合推演生效。"""
     saved = save_runtime_game(
-        request.hitl_min_decisions, request.court_chat_debate_rounds, request.max_decree_issues
+        request.hitl_min_decisions,
+        request.court_chat_debate_rounds,
+        request.max_decree_issues,
+        request.issue_log_limit,
     )
     return {"ok": True, "game_settings": saved}
 
@@ -2616,11 +2622,11 @@ async def api_create_manual_issue(request: ManualIssueCreateRequest) -> Dict[str
     if not title:
         raise HTTPException(status_code=400, detail="名称（标题）不能为空")
     max_n = int(load_runtime_game().get("max_decree_issues", 10))
-    cur = game.db.count_active_manual_issues()
+    cur = game.db.count_active_decree_issues()
     if cur >= max_n:
         raise HTTPException(
             status_code=409,
-            detail=f"手动局势已达上限（{max_n} 条），请先撤销部分局势，或在主菜单游戏设置调高上限。当前：{cur} 条。",
+            detail=f"decree 来源局势已达上限（{max_n} 条），请先撤销部分局势，或在主菜单游戏设置调高上限。当前：{cur} 条。",
         )
     tags = [str(t).strip() for t in (preset_override.get("tags") or request.tags or []) if str(t).strip()]
     resolve_effect = dict(preset_override.get("effect_on_resolve") or _build_manual_resolve_effect(request.entity, title))

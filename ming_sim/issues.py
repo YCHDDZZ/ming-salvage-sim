@@ -549,6 +549,14 @@ def _compact_issue_log(text: object, max_chars: int = 80) -> str:
     return note
 
 
+def _load_max_decree_issues() -> int:
+    try:
+        from ming_sim.llm_config import load_runtime_game
+        return int(load_runtime_game().get("max_decree_issues", 10))
+    except Exception:
+        return 10
+
+
 def make_issue_log_compactor(
     llm_config: Optional[LLMConfig] = None,
     agno_db: Optional[SqliteDb] = None,
@@ -1342,6 +1350,8 @@ def apply_issue_tracker_output(
     #    event_pool —— 预设事件（EVENTS/SEED_EVENTS）被推演判定触发，按预设 event 立 issue
     #    其它来源一律拒。
     initiative_active = db.count_active_initiatives()
+    decree_active = db.count_active_decree_issues()
+    max_decree_issues = _load_max_decree_issues()
     for ni in tracker_output.get("new_issues", []) or []:
         title = str(ni.get("title") or "")
         origin_kind = str(ni.get("origin_kind") or "").lower()
@@ -1377,6 +1387,13 @@ def apply_issue_tracker_output(
         ni = _preset_override_new_issue(ni)
         title = str(ni.get("title") or title)
         kind = str(ni.get("kind") or "initiative")
+        if decree_active >= max_decree_issues:
+            applied_new.append({
+                "title": title,
+                "rejected": True,
+                "reason": f"decree 来源局势已达上限（{max_decree_issues} 条）",
+            })
+            continue
         if kind == "initiative" and initiative_active >= 10:
             applied_new.append({"title": title, "rejected": True, "reason": "已有十事在办，朝廷分身乏术，难再添新工。"})
             continue
@@ -1406,6 +1423,7 @@ def apply_issue_tracker_output(
                 resolve_condition=str(ni.get("resolve_condition") or "")[:300],
                 fail_condition=str(ni.get("fail_condition") or "")[:300],
             )
+            decree_active += 1
             if kind == "initiative":
                 initiative_active += 1
             applied_new.append({"issue_id": issue_id, "kind": kind, "title": title, "rejected": False})
