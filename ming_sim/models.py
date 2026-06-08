@@ -46,6 +46,11 @@ class Character:
     courage: int
     style: str
     power_id: str
+    diplomacy: int = 50  # 外交
+    martial: int = 50  # 军事
+    stewardship: int = 50  # 管理
+    intrigue: int = 50  # 谋略
+    learning: int = 50  # 学识
     location: str = ""
     birth_year: int = 0  # 历史生年（公历，0=未填）
     historical_death_year: int = 0  # 历史卒年（公历，0=未填）

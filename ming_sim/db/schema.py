@@ -67,6 +67,11 @@ class _SchemaMixin:
                 ability INTEGER NOT NULL,
                 integrity INTEGER NOT NULL,
                 courage INTEGER NOT NULL,
+                diplomacy INTEGER NOT NULL DEFAULT 50,
+                martial INTEGER NOT NULL DEFAULT 50,
+                stewardship INTEGER NOT NULL DEFAULT 50,
+                intrigue INTEGER NOT NULL DEFAULT 50,
+                learning INTEGER NOT NULL DEFAULT 50,
                 style TEXT NOT NULL,
                 birth_year INTEGER NOT NULL DEFAULT 0,
                 historical_death_year INTEGER NOT NULL DEFAULT 0,
@@ -491,6 +496,8 @@ class _SchemaMixin:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 issue_id INTEGER NOT NULL,
                 turn INTEGER NOT NULL,
+                year INTEGER NOT NULL DEFAULT 0,
+                period INTEGER NOT NULL DEFAULT 0,
                 trigger_kind TEXT NOT NULL,
                 trigger_ref TEXT NOT NULL DEFAULT '',
                 delta_bar INTEGER NOT NULL DEFAULT 0,
@@ -620,6 +627,12 @@ class _SchemaMixin:
         self.ensure_column("issues", "goal", "TEXT NOT NULL DEFAULT ''")
         # assignee：局势承办人/主责大臣。推演按其职掌、能力、状态判每月正负推进。
         self.ensure_column("issues", "assignee", "TEXT NOT NULL DEFAULT ''")
+        # 承办人授权（皇帝批专款+生杀权后，承办人每月自主从专款推进，不必再下圣旨）：
+        #   budget_pool=剩余专款万两（批复时累加，每月推演支取后递减；0=无专款）；
+        #   budget_source=专款出库（'国库'/'内库'/''）；death_authority=专断之权(0/1)。
+        self.ensure_column("issues", "budget_pool", "REAL NOT NULL DEFAULT 0")
+        self.ensure_column("issues", "budget_source", "TEXT NOT NULL DEFAULT ''")
+        self.ensure_column("issues", "death_authority", "INTEGER NOT NULL DEFAULT 0")
         self.ensure_column("characters", "birth_year", "INTEGER NOT NULL DEFAULT 0")
         self.ensure_column("characters", "historical_death_year", "INTEGER NOT NULL DEFAULT 0")
         self.ensure_column("characters", "historical_death_month", "INTEGER NOT NULL DEFAULT 0")
@@ -632,6 +645,36 @@ class _SchemaMixin:
         self.ensure_column("characters", "court_role", "TEXT NOT NULL DEFAULT ''")
         self.ensure_column("characters", "summary", "TEXT NOT NULL DEFAULT ''")
         self.ensure_column("characters", "aliases", "TEXT NOT NULL DEFAULT '[]'")
+        self.ensure_column("characters", "diplomacy", "INTEGER NOT NULL DEFAULT 50")
+        self.ensure_column("characters", "martial", "INTEGER NOT NULL DEFAULT 50")
+        self.ensure_column("characters", "stewardship", "INTEGER NOT NULL DEFAULT 50")
+        self.ensure_column("characters", "intrigue", "INTEGER NOT NULL DEFAULT 50")
+        self.ensure_column("characters", "learning", "INTEGER NOT NULL DEFAULT 50")
+        self.conn.execute(
+            """
+            UPDATE characters
+            SET diplomacy=MAX(0, MIN(100, ROUND((ability + loyalty) / 2.0))),
+                martial=MAX(0, MIN(100, ROUND((ability + courage) / 2.0))),
+                stewardship=ability,
+                intrigue=MAX(0, MIN(100, ROUND((ability + courage + (100 - integrity)) / 3.0))),
+                learning=ability
+            WHERE diplomacy=50 AND martial=50 AND stewardship=50 AND intrigue=50 AND learning=50
+            """
+        )
+        self.conn.execute(
+            """
+            UPDATE characters
+            SET martial=MAX(0, MIN(100, ROUND((ability + courage) / 2.0)))
+            WHERE martial=50
+            """
+        )
+        self.conn.execute(
+            """
+            UPDATE characters
+            SET stewardship=ability
+            WHERE stewardship=50
+            """
+        )
         # 步骤7：回合阶段（旧库迁移，schema 升级非 fallback）
         self.ensure_column("game_state", "turn_phase", "TEXT NOT NULL DEFAULT 'summoning'")
         # 结局：ended=1 时游戏终结；ending_status 为 context.ENDING_* 类型。
@@ -641,6 +684,9 @@ class _SchemaMixin:
         self.ensure_column("secret_orders", "sim_note", "TEXT NOT NULL DEFAULT ''")
         # 密令期限：0=无硬期限；到 due_turn 时自动转入待核议，由推演当月判 done/failed。
         self.ensure_column("secret_orders", "due_turn", "INTEGER NOT NULL DEFAULT 0")
+        # 局势推进日志时间列：旧库只有 turn，新日志补 year/period 供推演按年月回看。
+        self.ensure_column("issue_advances", "year", "INTEGER NOT NULL DEFAULT 0")
+        self.ensure_column("issue_advances", "period", "INTEGER NOT NULL DEFAULT 0")
         # fiscal_config 科目元数据列（数据驱动预算目录）：budget_role=fixed 的 base 项靠
         # account/direction/display 由 flows.compute_budget_lines 动态生成预算行；
         # dynamic 项（田赋/辽饷/盐税/商税/皇庄）走省级公式/皇庄专路，这三列留空。

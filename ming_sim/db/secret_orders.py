@@ -19,6 +19,7 @@ from ming_sim.constants import (
     FISCAL_SCORE_FIELDS, REGION_FIELD_ALIASES, REGION_SCORE_FIELDS, REGION_TEXT_FIELDS, TURN_UNIT,
 )
 from ming_sim.content import GameContent
+from ming_sim.llm_config import load_runtime_game
 from ming_sim.matching import match_army_id_from_text, match_region_id_from_text
 from ming_sim.models import Event, GameState, monthly_amount, period_label
 from ming_sim.token_stats import tlog
@@ -72,20 +73,31 @@ class _SecretOrdersMixin:
         importance: int = 4,
         deadline_months: int = 0,
     ) -> int:
+        game_settings = load_runtime_game()
+        total_limit = max(1, int(game_settings.get("secret_order_total_limit", 5) or 5))
+        person_limit = max(1, int(game_settings.get("secret_order_person_limit", 1) or 1))
         active_count = self.conn.execute(
             "SELECT COUNT(*) FROM secret_orders WHERE status='active'"
         ).fetchone()[0]
-        if active_count >= 5:
-            raise ValueError(f"进行中密令已达上限（5条），请先结案或撤销部分密令再下新令。当前：{active_count} 条。")
-        # 一个承办人同一时间只能执行一条进行中密令
-        assignee_active = self.conn.execute(
-            "SELECT id, title FROM secret_orders WHERE status='active' AND minister_name = ?",
+        if active_count >= total_limit:
+            raise ValueError(f"进行中密令已达上限（{total_limit}条），请先结案或撤销部分密令再下新令。当前：{active_count} 条。")
+        # 单个承办人同时进行中的密令数量受游戏设置约束。
+        assignee_active_count = self.conn.execute(
+            "SELECT COUNT(*) FROM secret_orders WHERE status='active' AND minister_name = ?",
             (minister_name,),
-        ).fetchone()
-        if assignee_active is not None:
+        ).fetchone()[0]
+        if assignee_active_count >= person_limit:
+            assignee_active = self.conn.execute(
+                "SELECT id, title FROM secret_orders WHERE status='active' AND minister_name = ? ORDER BY id ASC LIMIT 1",
+                (minister_name,),
+            ).fetchone()
+            existing = (
+                f"〔#{int(assignee_active['id'])} {assignee_active['title']}〕"
+                if assignee_active is not None else ""
+            )
             raise ValueError(
-                f"{minister_name}名下已有进行中密令〔#{int(assignee_active['id'])} {assignee_active['title']}〕，"
-                f"同一承办人同一时间只能执行一条密令，请先结案/撤销该令再下新令。"
+                f"{minister_name}名下已有进行中密令 {assignee_active_count} 条{existing}，"
+                f"单个承办人同时进行中的密令上限为 {person_limit} 条，请先结案/撤销部分密令再下新令。"
             )
         tags_json = json.dumps(tags, ensure_ascii=False)
         deadline = max(0, min(int(deadline_months or 0), 36))

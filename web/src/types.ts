@@ -87,6 +87,14 @@ export type Technology = {
   origin: string;
 };
 
+export type Department = {
+  name: string;
+  authority_scope: string;
+  power: number;
+  responsibility: number;
+  corruption_risk: number;
+};
+
 export type PresetTreeItem = {
   key: string;
   name: string;
@@ -156,6 +164,11 @@ export type Minister = {
   ability?: number;
   integrity?: number;
   courage?: number;
+  diplomacy?: number;
+  martial?: number;
+  stewardship?: number;
+  intrigue?: number;
+  learning?: number;
   style: string;
   location?: string;
   birth_year?: number;
@@ -224,6 +237,9 @@ export type Issue = {
   duration_turns?: number;
   goal?: string;
   assignee?: string;
+  budget_pool?: number;       // 承办人专款余额（万两）
+  budget_source?: string;     // 专款出库：'国库' / '内库' / ''
+  death_authority?: boolean;  // 专断之权（生杀权）
   origin_turn?: number;
 };
 
@@ -332,6 +348,7 @@ export type GameState = {
   events: EventItem[];
   regions: Region[];
   armies: Army[];
+  departments: Department[];
   technologies: Technology[];
   preset_trees?: PresetTrees;
   map_nodes: MapNode[];
@@ -475,8 +492,17 @@ export type MenuStatus = {
   game_settings?: {
     hitl_min_decisions: number;
     court_chat_debate_rounds?: number;
+    court_chat_stream_speed?: number;
     max_decree_issues?: number;
     issue_log_limit?: number;
+    secret_order_person_limit?: number;
+    secret_order_total_limit?: number;
+    minister_temperature?: number;
+    minister_top_p?: number;
+    simulator_temperature?: number;
+    simulator_top_p?: number;
+    extractor_temperature?: number;
+    extractor_top_p?: number;
   };
   llm: {
     base_url: string;

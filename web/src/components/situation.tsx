@@ -2,7 +2,7 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { api } from "../api";
 import { formatClosedEffect, formatIssueEffect, issueTone } from "../format";
-import type { ClosedIssue, Issue, PresetTreeItem, PresetTrees } from "../types";
+import type { ClosedIssue, Issue, Minister, PresetTreeItem, PresetTrees } from "../types";
 
 // 八题材分类（与后端 ISSUE_THEMES 对齐）：决定手动局势走满后落成何种实体。
 const ISSUE_THEMES = ["工程", "科技", "政治", "军事", "民生", "经济", "文化", "其他"] as const;
@@ -22,11 +22,12 @@ export function groupIssues(issues: Issue[]) {
   };
 }
 
-export function SituationPanel({ issues, closedIssues, hasLegacies, compact = false, onOpenDrawer, onChanged }: {
+export function SituationPanel({ issues, closedIssues, hasLegacies, compact = false, ministers = [], onOpenDrawer, onChanged }: {
   issues: Issue[];
   closedIssues: ClosedIssue[];
   hasLegacies: boolean;
   compact?: boolean;
+  ministers?: Minister[];
   onOpenDrawer?: () => void;
   onChanged?: () => void | Promise<void>;
 }) {
@@ -63,7 +64,7 @@ export function SituationPanel({ issues, closedIssues, hasLegacies, compact = fa
         <div className="situation-group">
           <div className="situation-group-title">长期局势</div>
           <div className="situation-list">
-            {shownLongTerm.map((issue) => <SituationRow key={issue.id} issue={issue} onChanged={onChanged} />)}
+            {shownLongTerm.map((issue) => <SituationRow key={issue.id} issue={issue} ministers={ministers} onChanged={onChanged} />)}
           </div>
         </div>
       ) : null}
@@ -71,7 +72,7 @@ export function SituationPanel({ issues, closedIssues, hasLegacies, compact = fa
         <div className="situation-group">
           <div className="situation-group-title">近期局势</div>
           <div className="situation-list">
-            {shownNearTerm.map((issue) => <SituationRow key={issue.id} issue={issue} onChanged={onChanged} />)}
+            {shownNearTerm.map((issue) => <SituationRow key={issue.id} issue={issue} ministers={ministers} onChanged={onChanged} />)}
           </div>
         </div>
       ) : null}
@@ -91,13 +92,14 @@ export function SituationPanel({ issues, closedIssues, hasLegacies, compact = fa
   );
 }
 
-export function SituationDrawer({ open, issues, closedIssues, onClose, maxDecreeIssues = 10, regions = [], presetTrees, onChanged }: {
+export function SituationDrawer({ open, issues, closedIssues, onClose, maxDecreeIssues = 10, regions = [], ministers = [], presetTrees, onChanged }: {
   open: boolean;
   issues: Issue[];
   closedIssues: ClosedIssue[];
   onClose: () => void;
   maxDecreeIssues?: number;
   regions?: { id: string; name: string }[];
+  ministers?: Minister[];
   presetTrees?: PresetTrees;
   onChanged?: () => void | Promise<void>;
 }) {
@@ -145,14 +147,15 @@ export function SituationDrawer({ open, issues, closedIssues, onClose, maxDecree
               ))}
             </section>
           ) : null}
-          <SituationDrawerGroup title="长期局势" issues={longTerm} onEdit={(i) => setEditor({ mode: "edit", issue: i })} onChanged={onChanged} />
-          <SituationDrawerGroup title="近期局势" issues={nearTerm} onEdit={(i) => setEditor({ mode: "edit", issue: i })} onChanged={onChanged} />
+          <SituationDrawerGroup title="长期局势" issues={longTerm} ministers={ministers} onEdit={(i) => setEditor({ mode: "edit", issue: i })} onChanged={onChanged} />
+          <SituationDrawerGroup title="近期局势" issues={nearTerm} ministers={ministers} onEdit={(i) => setEditor({ mode: "edit", issue: i })} onChanged={onChanged} />
         </div>
       </aside>
       {editor ? (
         <ManualIssueEditor
           editing={editor.mode === "edit" ? editor.issue : null}
           regions={regions}
+          ministers={ministers}
           presetTrees={presetTrees}
           onClose={() => setEditor(null)}
           onSaved={async () => {
@@ -165,9 +168,10 @@ export function SituationDrawer({ open, issues, closedIssues, onClose, maxDecree
   );
 }
 
-function SituationDrawerGroup({ title, issues, onEdit, onChanged }: {
+function SituationDrawerGroup({ title, issues, ministers, onEdit, onChanged }: {
   title: string;
   issues: Issue[];
+  ministers: Minister[];
   onEdit?: (issue: Issue) => void;
   onChanged?: () => void | Promise<void>;
 }) {
@@ -176,14 +180,15 @@ function SituationDrawerGroup({ title, issues, onEdit, onChanged }: {
     <section className="situation-drawer-section">
       <h3>{title}</h3>
       {issues.map((issue) => (
-        <SituationDrawerRow issue={issue} key={`drawer-${issue.id}`} onEdit={onEdit} onChanged={onChanged} />
+        <SituationDrawerRow issue={issue} ministers={ministers} key={`drawer-${issue.id}`} onEdit={onEdit} onChanged={onChanged} />
       ))}
     </section>
   );
 }
 
-function SituationDrawerRow({ issue, onEdit, onChanged }: {
+function SituationDrawerRow({ issue, ministers, onEdit, onChanged }: {
   issue: Issue;
+  ministers: Minister[];
   onEdit?: (issue: Issue) => void;
   onChanged?: () => void | Promise<void>;
 }) {
@@ -223,19 +228,19 @@ function SituationDrawerRow({ issue, onEdit, onChanged }: {
         {issue.is_manual ? (
           <div className="situation-manual-actions" onClick={(e) => e.stopPropagation()}>
             <span className="situation-manual-dur">
-              {issue.duration_turns ? `持续 ${issue.duration_turns} 回合` : "无期限"}
+              {issue.assignee ? `承办：${issue.assignee}` : "未指定承办"}
             </span>
             <button type="button" onClick={(e) => { e.stopPropagation(); onEdit?.(issue); }}>编辑</button>
             <button type="button" className="danger" onClick={onDelete}>删除</button>
           </div>
         ) : null}
       </article>
-      {detail ? <SituationDetailModal issue={issue} onClose={() => setDetail(false)} onChanged={onChanged} /> : null}
+      {detail ? <SituationDetailModal issue={issue} ministers={ministers} onClose={() => setDetail(false)} onChanged={onChanged} /> : null}
     </>
   );
 }
 
-// 手动局势新建/编辑弹窗：名称(title) + 分类(tags，仅新建) + 目标(goal) + 持续回合数。
+// 手动局势新建/编辑弹窗：名称(title) + 分类(tags，仅新建) + 目标(goal) + 承办人。
 // 目标喂给推演逐月推进；分类决定走满后落成何种实体（工程→建筑、科技→科技、政治→部门）。
 // 题材 → 走满落成的实体类型。工程→建筑、科技→科技、政治→部门；其余题材无实体（只是可追踪局势）。
 const THEME_ENTITY: Record<string, "building" | "technology" | "department" | ""> = {
@@ -251,15 +256,221 @@ function presetRequirementText(item: PresetTreeItem, pool: PresetTreeItem[]) {
   return `前置：${names.join("、")}`;
 }
 
-export function ManualIssueEditor({ editing, regions = [], presetTrees, onClose, onSaved }: {
+function assigneePct(minister: Minister | null) {
+  if (!minister) return null;
+  const ability = minister.ability ?? 50;
+  const loyalty = minister.loyalty ?? 50;
+  const integrity = minister.integrity ?? 50;
+  const courage = minister.courage ?? 50;
+  const domain = Math.max(
+    minister.diplomacy ?? 50,
+    minister.martial ?? 50,
+    minister.stewardship ?? 50,
+    minister.intrigue ?? 50,
+    minister.learning ?? 50,
+  );
+  const pct = Math.round(
+    (domain - 50) * 1.3
+    + (ability - 50) * 0.7
+    + (loyalty - 50) * 0.6
+    + (integrity - 50) * 0.5
+    + (courage - 50) * 0.4
+  );
+  return Math.max(-80, Math.min(80, pct));
+}
+
+function signedPct(value: number) {
+  return `${value > 0 ? "+" : ""}${value}%`;
+}
+
+function AssigneePreview({ minister }: { minister: Minister | null }) {
+  if (!minister) {
+    return <small className="manual-issue-hint">未指定承办人时，月末更容易按责任无着处理。</small>;
+  }
+  const pct = assigneePct(minister) ?? 0;
+  return (
+    <div className="manual-assignee-card">
+      <div className="manual-assignee-head">
+        <b>{minister.name}</b>
+        <span className={pct >= 0 ? "positive" : "negative"}>承办修正 {signedPct(pct)}</span>
+      </div>
+      <div className="manual-assignee-office">{minister.office || minister.office_type || "无职"} · {minister.faction}</div>
+      <div className="manual-assignee-stats">
+        <span>能力 {minister.ability ?? 50}</span>
+        <span>忠诚 {minister.loyalty ?? 50}</span>
+        <span>清廉 {minister.integrity ?? 50}</span>
+        <span>胆略 {minister.courage ?? 50}</span>
+        <span>外交 {minister.diplomacy ?? 50}</span>
+        <span>军事 {minister.martial ?? 50}</span>
+        <span>管理 {minister.stewardship ?? 50}</span>
+        <span>谋略 {minister.intrigue ?? 50}</span>
+        <span>学识 {minister.learning ?? 50}</span>
+      </div>
+    </div>
+  );
+}
+
+type AssigneeSortKey =
+  | "name" | "office" | "faction" | "pct" | "ability" | "loyalty" | "integrity" | "courage"
+  | "diplomacy" | "martial" | "stewardship" | "intrigue" | "learning";
+
+const ASSIGNEE_SORT_LABELS: Record<AssigneeSortKey, string> = {
+  name: "姓名",
+  office: "官职",
+  faction: "派系",
+  pct: "修正",
+  ability: "能力",
+  loyalty: "忠诚",
+  integrity: "清廉",
+  courage: "胆略",
+  diplomacy: "外交",
+  martial: "军事",
+  stewardship: "管理",
+  intrigue: "谋略",
+  learning: "学识",
+};
+
+function ministerSortValue(minister: Minister, key: AssigneeSortKey): string | number {
+  if (key === "pct") return assigneePct(minister) ?? -999;
+  if (key === "office") return minister.office || minister.office_type || "";
+  if (key === "faction") return minister.faction || "";
+  if (key === "name") return minister.name || "";
+  return minister[key] ?? 50;
+}
+
+function AssigneePickerModal({ ministers, selected, onSelect, onClose }: {
+  ministers: Minister[];
+  selected: string;
+  onSelect: (name: string) => void;
+  onClose: () => void;
+}) {
+  const [sortKey, setSortKey] = React.useState<AssigneeSortKey>("pct");
+  const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
+  const [query, setQuery] = React.useState("");
+  const chooseSort = (key: AssigneeSortKey) => {
+    if (key === sortKey) {
+      setSortDir((cur) => (cur === "desc" ? "asc" : "desc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "name" || key === "office" || key === "faction" ? "asc" : "desc");
+    }
+  };
+  const rows = React.useMemo(() => {
+    const q = query.trim();
+    return ministers
+      .filter((m) => {
+        if (!q) return true;
+        return [m.name, m.office, m.office_type, m.faction, ...(m.personal_skills || [])]
+          .some((part) => String(part || "").includes(q));
+      })
+      .sort((a, b) => {
+        const av = ministerSortValue(a, sortKey);
+        const bv = ministerSortValue(b, sortKey);
+        let cmp = 0;
+        if (typeof av === "number" && typeof bv === "number") {
+          cmp = av - bv;
+        } else {
+          cmp = String(av).localeCompare(String(bv), "zh-Hans-CN");
+        }
+        if (cmp === 0) cmp = a.name.localeCompare(b.name, "zh-Hans-CN");
+        return sortDir === "desc" ? -cmp : cmp;
+      });
+  }, [ministers, query, sortKey, sortDir]);
+  const header = (key: AssigneeSortKey, className = "") => (
+    <th className={className}>
+      <button type="button" onClick={() => chooseSort(key)}>
+        {ASSIGNEE_SORT_LABELS[key]}{sortKey === key ? (sortDir === "desc" ? "↓" : "↑") : ""}
+      </button>
+    </th>
+  );
+  return createPortal(
+    <div className="assignee-picker-layer" role="dialog" aria-modal="true" aria-label="选择承办人">
+      <div className="assignee-picker-scrim" onClick={onClose} />
+      <section className="assignee-picker">
+        <header className="assignee-picker-head">
+          <div>
+            <h2>选择承办人</h2>
+            <span>共 {rows.length} 名在朝大臣</span>
+          </div>
+          <button type="button" className="assignee-picker-close" onClick={onClose}>×</button>
+        </header>
+        <div className="assignee-picker-tools">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜索姓名、官职、派系、标签"
+            autoFocus
+          />
+          <button type="button" onClick={() => { onSelect(""); onClose(); }}>清空承办人</button>
+        </div>
+        <div className="assignee-picker-table-wrap">
+          <table className="assignee-picker-table">
+            <thead>
+              <tr>
+                {header("name", "name-col")}
+                {header("office", "office-col")}
+                {header("faction")}
+                {header("pct")}
+                {header("diplomacy")}
+                {header("martial")}
+                {header("stewardship")}
+                {header("intrigue")}
+                {header("learning")}
+                {header("ability")}
+                {header("loyalty")}
+                {header("integrity")}
+                {header("courage")}
+                <th className="action-col"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((m) => {
+                const pct = assigneePct(m) ?? 0;
+                const picked = selected === m.name;
+                return (
+                  <tr key={m.name} className={picked ? "selected" : ""} onDoubleClick={() => { onSelect(m.name); onClose(); }}>
+                    <td className="name-col"><b>{m.name}</b></td>
+                    <td className="office-col">{m.office || m.office_type || "无职"}</td>
+                    <td>{m.faction || "未载"}</td>
+                    <td className={pct >= 0 ? "positive" : "negative"}>{signedPct(pct)}</td>
+                    <td>{m.diplomacy ?? 50}</td>
+                    <td>{m.martial ?? 50}</td>
+                    <td>{m.stewardship ?? 50}</td>
+                    <td>{m.intrigue ?? 50}</td>
+                    <td>{m.learning ?? 50}</td>
+                    <td>{m.ability ?? 50}</td>
+                    <td>{m.loyalty ?? 50}</td>
+                    <td>{m.integrity ?? 50}</td>
+                    <td>{m.courage ?? 50}</td>
+                    <td className="action-col">
+                      <button type="button" onClick={() => { onSelect(m.name); onClose(); }}>
+                        {picked ? "已选" : "选择"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!rows.length ? (
+                <tr><td colSpan={14} className="assignee-empty">没有匹配的大臣。</td></tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>,
+    document.body,
+  );
+}
+
+export function ManualIssueEditor({ editing, regions = [], ministers = [], presetTrees, onClose, onSaved }: {
   editing: Issue | null;
   regions?: { id: string; name: string }[];
+  ministers?: Minister[];
   presetTrees?: PresetTrees;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
   const [title, setTitle] = React.useState(editing?.title || "");
-  const [duration, setDuration] = React.useState<number>(editing?.duration_turns || 0);
   const [goal, setGoal] = React.useState(editing?.goal || "");
   const [assignee, setAssignee] = React.useState(editing?.assignee || "");
   const [category, setCategory] = React.useState<string>(editing?.tags?.[0] || "工程");
@@ -272,6 +483,7 @@ export function ManualIssueEditor({ editing, regions = [], presetTrees, onClose,
   const [effectSummary, setEffectSummary] = React.useState<string>("");
   const [presetMode, setPresetMode] = React.useState<"preset" | "custom">("preset");
   const [presetKey, setPresetKey] = React.useState<string>("");
+  const [assigneePickerOpen, setAssigneePickerOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState("");
   const entityKind = THEME_ENTITY[category] || "";
@@ -282,6 +494,11 @@ export function ManualIssueEditor({ editing, regions = [], presetTrees, onClose,
       : [];
   const selectablePresets = presetPool.filter((p) => !p.unlocked);
   const selectedPreset = presetPool.find((p) => p.key === presetKey) || null;
+  const assigneeOptions = React.useMemo(
+    () => buildAssigneeOptions(ministers),
+    [ministers],
+  );
+  const selectedAssignee = assigneeOptions.find((m) => m.name === assignee) || null;
   React.useEffect(() => {
     if (entityKind !== "technology" && entityKind !== "department") {
       setPresetKey("");
@@ -307,10 +524,10 @@ export function ManualIssueEditor({ editing, regions = [], presetTrees, onClose,
     setErr("");
     try {
       if (editing) {
-        // 编辑：仅名称/持续可改。goal 立项后锁定、实体固定字段不可改。
+        // 编辑：仅名称/承办人可改。goal 立项后锁定、实体固定字段不可改。
         await api(`/api/issues/manual/${editing.id}`, {
           method: "PATCH",
-          body: JSON.stringify({ title: title.trim(), duration_turns: duration, assignee: assignee.trim() }),
+          body: JSON.stringify({ title: title.trim(), assignee: assignee.trim() }),
         });
       } else {
         // 按题材组装实体固定字段，立项预埋。
@@ -335,7 +552,7 @@ export function ManualIssueEditor({ editing, regions = [], presetTrees, onClose,
         }
         await api("/api/issues/manual", {
           method: "POST",
-          body: JSON.stringify({ title: title.trim(), duration_turns: duration, goal: goal.trim(), assignee: assignee.trim(), tags: [category], entity }),
+          body: JSON.stringify({ title: title.trim(), goal: goal.trim(), assignee: assignee.trim(), tags: [category], entity }),
         });
       }
       await onSaved();
@@ -466,26 +683,24 @@ export function ManualIssueEditor({ editing, regions = [], presetTrees, onClose,
           )}
           <label>
             承办人
-            <input
-              type="text"
-              value={assignee}
-              maxLength={20}
-              placeholder="如：毕自严、徐光启、孙承宗"
-              onChange={(e) => setAssignee(e.target.value)}
-            />
-            <small className="manual-issue-hint">留空则责任无着，月末更容易负向推进。</small>
+            <div className="issue-assignee-row">
+              <button type="button" onClick={() => setAssigneePickerOpen(true)}>
+                {selectedAssignee ? "重选承办人" : "选择承办人"}
+              </button>
+              <button type="button" className="ghost" onClick={() => setAssignee("")} disabled={!assignee}>
+                清空
+              </button>
+            </div>
+            <AssigneePreview minister={selectedAssignee} />
           </label>
-          <label>
-            持续回合数
-            <input
-              type="number"
-              min={0}
-              max={120}
-              value={duration}
-              onChange={(e) => setDuration(Math.max(0, Number(e.target.value) || 0))}
+          {assigneePickerOpen ? (
+            <AssigneePickerModal
+              ministers={assigneeOptions}
+              selected={assignee}
+              onSelect={setAssignee}
+              onClose={() => setAssigneePickerOpen(false)}
             />
-            <small className="manual-issue-hint">0 = 无期限；&gt;0 到期自动撤销。</small>
-          </label>
+          ) : null}
           <div className="manual-issue-actions">
             <button onClick={onClose} disabled={busy}>取消</button>
             <button className="primary" onClick={save} disabled={busy}>{busy ? "保存中…" : "保存"}</button>
@@ -497,7 +712,7 @@ export function ManualIssueEditor({ editing, regions = [], presetTrees, onClose,
   );
 }
 
-export function SituationRow({ issue, onChanged }: { issue: Issue; onChanged?: () => void | Promise<void> }) {
+export function SituationRow({ issue, ministers = [], onChanged }: { issue: Issue; ministers?: Minister[]; onChanged?: () => void | Promise<void> }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const [tipPos, setTipPos] = React.useState<{ x: number; y: number } | null>(null);
   const [detail, setDetail] = React.useState(false);
@@ -528,7 +743,7 @@ export function SituationRow({ issue, onChanged }: { issue: Issue; onChanged?: (
         <i style={{ width: `${Math.max(0, Math.min(100, issue.bar_value))}%` }} />
       </div>
       {tipPos && !detail ? <SituationTip issue={issue} pos={tipPos} /> : null}
-      {detail ? <SituationDetailModal issue={issue} onClose={closeDetail} onChanged={onChanged} /> : null}
+      {detail ? <SituationDetailModal issue={issue} ministers={ministers} onClose={closeDetail} onChanged={onChanged} /> : null}
     </div>
   );
 }
@@ -562,30 +777,149 @@ export function SituationTip({ issue, pos }: { issue: Issue; pos: { x: number; y
 }
 
 
+function buildAssigneeOptions(ministers: Minister[]) {
+  return ministers
+    .filter((m) => m.status === "active" && (m.power_id ?? "ming") === "ming")
+    .sort((a, b) => a.name.localeCompare(b.name, "zh-Hans-CN"));
+}
+
+function IssueAssigneeEditor({ issue, ministers, onChanged }: {
+  issue: Issue;
+  ministers: Minister[];
+  onChanged?: () => void | Promise<void>;
+}) {
+  const options = React.useMemo(() => buildAssigneeOptions(ministers), [ministers]);
+  const [value, setValue] = React.useState(issue.assignee || "");
+  const [pickerOpen, setPickerOpen] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [err, setErr] = React.useState("");
+  React.useEffect(() => {
+    setValue(issue.assignee || "");
+    setErr("");
+  }, [issue.id, issue.assignee]);
+  const selected = options.find((m) => m.name === value) || null;
+  const changed = value !== (issue.assignee || "");
+  const save = async () => {
+    setSaving(true);
+    setErr("");
+    try {
+      await api(`/api/issues/${issue.id}/assignee`, {
+        method: "PATCH",
+        body: JSON.stringify({ assignee: value }),
+      });
+      await onChanged?.();
+    } catch (e: any) {
+      setErr(e?.message || "改派失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="issue-goal-box issue-assignee-editor">
+      <div className="issue-goal-label">承办人</div>
+      <div className="issue-assignee-row">
+        <button type="button" onClick={() => setPickerOpen(true)} disabled={saving}>
+          {selected ? "重选承办人" : "选择承办人"}
+        </button>
+        <button type="button" className="ghost" onClick={() => setValue("")} disabled={saving || !value}>
+          清空
+        </button>
+        <button type="button" onClick={save} disabled={saving || !changed}>
+          {saving ? "保存中" : "改派"}
+        </button>
+      </div>
+      <AssigneePreview minister={selected} />
+      {pickerOpen ? (
+        <AssigneePickerModal
+          ministers={options}
+          selected={value}
+          onSelect={setValue}
+          onClose={() => setPickerOpen(false)}
+        />
+      ) : null}
+      {err ? <small className="manual-issue-err">{err}</small> : null}
+    </div>
+  );
+}
+
+// 承办人授权：批专款（指定出库）+ 生杀权。批后承办人每月自主从专款推进，不必再下圣旨。
+function IssueAuthorizationEditor({ issue, onChanged }: {
+  issue: Issue;
+  onChanged?: () => void | Promise<void>;
+}) {
+  const pool = Number(issue.budget_pool || 0);
+  const [add, setAdd] = React.useState(0);
+  const [source, setSource] = React.useState(issue.budget_source || "国库");
+  const [death, setDeath] = React.useState(!!issue.death_authority);
+  const [saving, setSaving] = React.useState(false);
+  const [err, setErr] = React.useState("");
+  React.useEffect(() => {
+    setAdd(0);
+    setSource(issue.budget_source || "国库");
+    setDeath(!!issue.death_authority);
+    setErr("");
+  }, [issue.id, issue.budget_source, issue.death_authority]);
+  const changed = add > 0 || source !== (issue.budget_source || "国库") || death !== !!issue.death_authority;
+  const save = async () => {
+    setSaving(true);
+    setErr("");
+    try {
+      await api(`/api/issues/${issue.id}/authorization`, {
+        method: "POST",
+        body: JSON.stringify({ budget_add: add, budget_source: source, death_authority: death }),
+      });
+      await onChanged?.();
+    } catch (e: any) {
+      setErr(e?.message || "授权失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="issue-goal-box issue-auth-editor">
+      <div className="issue-goal-label">承办人授权 <small>（批专款后承办人逐月自理，不必再下旨）</small></div>
+      <div className="situation-tip-row"><span>现有专款</span><b>{pool > 0 ? `${pool} 万两（${issue.budget_source || "—"}）` : "未拨"}</b></div>
+      <div className="issue-auth-row">
+        <label>追加拨款（万两）</label>
+        <input type="number" min={0} step={1} value={add}
+          onChange={(e) => setAdd(Math.max(0, Number(e.target.value) || 0))} disabled={saving} />
+      </div>
+      <div className="issue-auth-row">
+        <label>出库</label>
+        <select value={source} onChange={(e) => setSource(e.target.value)} disabled={saving}>
+          <option value="国库">国库</option>
+          <option value="内库">内库</option>
+        </select>
+      </div>
+      <label className="issue-auth-toggle">
+        <input type="checkbox" checked={death} onChange={(e) => setDeath(e.target.checked)} disabled={saving} />
+        <span>赐专断之权（可不请旨拿问、处置阻挠的贪官劣绅；不得擅动在朝大臣）</span>
+      </label>
+      <div className="issue-auth-actions">
+        <button type="button" onClick={save} disabled={saving || !changed}>
+          {saving ? "颁下中" : "颁授权"}
+        </button>
+      </div>
+      {err ? <small className="manual-issue-err">{err}</small> : null}
+    </div>
+  );
+}
+
 // 局势目标(goal)只读展示——goal 立项后锁定不可改。
 function IssueGoalView({ issue }: { issue: Issue }) {
-  if (!issue.goal && !issue.assignee) return null;
+  if (!issue.goal) return null;
   return (
     <div className="issue-goal-box">
-      {issue.assignee ? (
-        <>
-          <div className="issue-goal-label">承办</div>
-          <p className="issue-goal-text">{issue.assignee}</p>
-        </>
-      ) : null}
-      {issue.goal ? (
-        <>
-          <div className="issue-goal-label">目标</div>
-          <p className="issue-goal-text">{issue.goal}</p>
-        </>
-      ) : null}
+      <div className="issue-goal-label">目标</div>
+      <p className="issue-goal-text">{issue.goal}</p>
     </div>
   );
 }
 
 // 局势详情弹窗（点击）：完整达成/失败条件 + 标签 + 目标(可改)。居中模态，Portal 脱离梯形
-export function SituationDetailModal({ issue, onClose, onChanged }: {
+export function SituationDetailModal({ issue, ministers = [], onClose, onChanged }: {
   issue: Issue;
+  ministers?: Minister[];
   onClose: () => void;
   onChanged?: () => void | Promise<void>;
 }) {
@@ -598,6 +932,8 @@ export function SituationDetailModal({ issue, onClose, onChanged }: {
         </div>
         <div className="situation-tip-inner">
         <IssueGoalView issue={issue} />
+        <IssueAssigneeEditor issue={issue} ministers={ministers} onChanged={onChanged} />
+        {issue.assignee ? <IssueAuthorizationEditor issue={issue} onChanged={onChanged} /> : null}
         <div className="situation-tip-row"><span>阶段</span><b>{issue.phase}</b></div>
         <div className="situation-tip-row"><span>进度</span><b>{issue.bar_value} / 100</b></div>
         <div className="situation-tip-row">

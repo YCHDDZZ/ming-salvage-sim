@@ -42,6 +42,11 @@ from ming_sim.skills import bind_content as _bind_skills
 
 AUTO_SAVE_PREFIX = "auto_"
 AUTO_SAVE_KEEP_TURNS = 3  # 每个 campaign 保留最近 N 个 turn 的全部自动存档（每 turn 含 begin + preresolve）
+# 本月无新诏的占位信号：必须以「本{TURN_UNIT}无新诏」开头（decree.py 靠 startswith 特判，
+# simulator prompt 也据此识别为"无诏"而非一道诏书）。刻意只保留这一句，不再附带长段办理说明——
+# 长段说明会被 simulator 误当成一道真诏书去核销。承办人自主推进的规则已写在 simulator
+# prompt 的「长期局势」章，不依赖这段占位文本传递。
+NO_NEW_DECREE_TEXT = f"本{TURN_UNIT}无新诏。"
 
 
 def prune_auto_saves(saves_dir: str, campaign_id: str, keep_turns: int = AUTO_SAVE_KEEP_TURNS) -> None:
@@ -300,6 +305,7 @@ def _sync_offices_from_db_impl(content: GameContent, db: "GameDB") -> None:
         """
         SELECT name, office, office_type, faction, aliases, personal_skills,
                loyalty, ability, integrity, courage, style,
+               diplomacy, martial, stewardship, intrigue, learning,
                birth_year, historical_death_year, historical_death_month,
                debut_year, debut_month, status, portrait_id, power_id, location,
                summary
@@ -336,6 +342,11 @@ def _sync_offices_from_db_impl(content: GameContent, db: "GameDB") -> None:
             integrity=int(row["integrity"]),
             courage=int(row["courage"]),
             style=row["style"],
+            diplomacy=int(row["diplomacy"] or 50),
+            martial=int(row["martial"] or 50),
+            stewardship=int(row["stewardship"] or 50),
+            intrigue=int(row["intrigue"] or 50),
+            learning=int(row["learning"] or 50),
             birth_year=int(row["birth_year"]),
             historical_death_year=int(row["historical_death_year"]),
             historical_death_month=int(row["historical_death_month"]),
@@ -873,7 +884,7 @@ class GameSession:
     def resolve_turn(self, decree: str = "", on_event=None, cheat_directive: str = "") -> ResolveResult:
         """颁诏并推演本回合（两步法）：simulator agent 先写**一整篇**月末邸报，
         extractor agent 再从邸报抽结构化增量落库（resolve_directives）。
-        要求无 pending 残留、≥1 条 draft。
+        要求无 pending 残留。无 draft 时视为本月无新诏，由既有承办人照前旨推进局势。
 
         on_event(kind, data): 推演过程实时回调，透传给 resolve_directives。
         cheat_directive: 作弊控制台强制结算项，拼到邸报最前喂 extractor 当既成事实。
@@ -884,13 +895,14 @@ class GameSession:
         if self.pending_count() > 0:
             raise ValueError(f"尚有 {self.pending_count()} 道大臣拟旨待陛下核定（准/驳），不能颁诏。")
         directives = self.db.list_directives(self.state, statuses=("draft",))
-        if not directives:
-            raise ValueError("网页/CLI 端不允许跳过回合：至少一条草案才能颁诏。")
         # 结算前先存一份：LLM 推演有可能崩，留个回滚锚点
         self.auto_save("preresolve")
-        decree_text = decree or self.last_decree or write_decree_with_agno(
-            self.llm_config, self.agno_db, self.state, directives, db=self.db
-        )
+        if directives:
+            decree_text = decree or self.last_decree or write_decree_with_agno(
+                self.llm_config, self.agno_db, self.state, directives, db=self.db
+            )
+        else:
+            decree_text = NO_NEW_DECREE_TEXT
         self.last_decree = decree_text
         result = resolve_directives(
             self.state, self.db, self.agno_db, self.llm_config,

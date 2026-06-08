@@ -155,7 +155,10 @@ def character_context(character: Character) -> str:
         f"别名：{', '.join(character.aliases) or '无'}，"
         f"人物标签：{', '.join(character.personal_skills)}，"
         f"忠诚{character.loyalty}，能力{character.ability}，清廉{character.integrity}，"
-        f"胆略{character.courage}，风格：{character.style}",
+        f"胆略{character.courage}，"
+        f"五维：外交{character.diplomacy}/军事{character.martial}/管理{character.stewardship}/"
+        f"谋略{character.intrigue}/学识{character.learning}，"
+        f"风格：{character.style}",
     ]
     if character.summary:
         parts.append(f"人物简介：{character.summary}")

@@ -63,6 +63,10 @@ function App() {
   const [courtChatLiveMessages, setCourtChatLiveMessages] = React.useState<CourtChatMessage[]>([]);
   const [courtChatSelectedMinisters, setCourtChatSelectedMinisters] = React.useState<string[]>([]);
   const [courtChatDecision, setCourtChatDecision] = React.useState<CourtChatMessage | null>(null);
+  const [courtChatStreamSpeed, setCourtChatStreamSpeed] = React.useState<number>(() => {
+    const saved = Number(localStorage.getItem("courtChatStreamSpeed") || "3");
+    return Number.isFinite(saved) ? Math.min(5, Math.max(1, saved)) : 3;
+  });
   const courtChatDeltaQueueRef = React.useRef<{ speaker: string; delta: string }[]>([]);
   const courtChatDrainTimerRef = React.useRef<number | null>(null);
   const courtChatAbortRef = React.useRef<AbortController | null>(null);
@@ -92,7 +96,7 @@ function App() {
   // 作弊控制台（Ctrl+~）：cheatDirective 暂存强制结算项，下次颁诏随结算一次性穿入。
   const [cheatOpen, setCheatOpen] = React.useState(false);
   const [cheatDirective, setCheatDirective] = React.useState("");
-  // HITL 决策点：颁诏推演若出重大抉择，暂停弹窗逐个亲裁，裁完续跑结算。
+  // HITL 决策点：颁诏推演若出遇阻纠偏，暂停弹窗逐个亲裁，裁完续跑结算。
   const [pendingDecisions, setPendingDecisions] = React.useState<PendingDecision[]>([]);
   const settling = busy === "月末结算";
 
@@ -153,25 +157,38 @@ function App() {
     });
   }, []);
 
+  const courtChatDeltaDelay = React.useMemo(() => {
+    const delays: Record<number, number> = { 1: 170, 2: 120, 3: 85, 4: 45, 5: 0 };
+    return delays[courtChatStreamSpeed] ?? 85;
+  }, [courtChatStreamSpeed]);
+
+  const updateCourtChatStreamSpeed = React.useCallback((value: number, persistLocal = true) => {
+    const next = Math.min(5, Math.max(1, Math.round(value)));
+    setCourtChatStreamSpeed(next);
+    if (persistLocal) {
+      localStorage.setItem("courtChatStreamSpeed", String(next));
+    }
+  }, []);
+
   const drainCourtChatDeltas = React.useCallback(() => {
     const next = courtChatDeltaQueueRef.current.shift();
     if (next) {
       appendCourtChatDelta(next.speaker, next.delta);
     }
     if (courtChatDeltaQueueRef.current.length) {
-      courtChatDrainTimerRef.current = window.setTimeout(drainCourtChatDeltas, 85);
+      courtChatDrainTimerRef.current = window.setTimeout(drainCourtChatDeltas, courtChatDeltaDelay);
     } else {
       courtChatDrainTimerRef.current = null;
     }
-  }, [appendCourtChatDelta]);
+  }, [appendCourtChatDelta, courtChatDeltaDelay]);
 
   const queueCourtChatDelta = React.useCallback((speaker: string, delta: string) => {
     if (!speaker || !delta) return;
     courtChatDeltaQueueRef.current.push({ speaker, delta });
     if (courtChatDrainTimerRef.current === null) {
-      courtChatDrainTimerRef.current = window.setTimeout(drainCourtChatDeltas, 85);
+      courtChatDrainTimerRef.current = window.setTimeout(drainCourtChatDeltas, courtChatDeltaDelay);
     }
-  }, [drainCourtChatDeltas]);
+  }, [courtChatDeltaDelay, drainCourtChatDeltas]);
 
   const flushCourtChatDeltas = React.useCallback(() => {
     while (courtChatDeltaQueueRef.current.length) {
@@ -205,8 +222,12 @@ function App() {
   const refreshMenuStatus = React.useCallback(async () => {
     const s = await api<MenuStatus>("/api/menu/status");
     setMenuStatus(s);
+    const configuredSpeed = Number(s.game_settings?.court_chat_stream_speed);
+    if (Number.isFinite(configuredSpeed)) {
+      updateCourtChatStreamSpeed(configuredSpeed, false);
+    }
     return s;
-  }, []);
+  }, [updateCourtChatStreamSpeed]);
 
   React.useEffect(() => {
     refreshMenuStatus()
@@ -899,7 +920,7 @@ function App() {
         return;
       }
       if (outcome.kind === "decisions") {
-        // 出重大抉择：暂停弹窗逐个亲裁，裁完调 submitDecisions 续跑结算。
+        // 出遇阻纠偏：暂停弹窗逐个亲裁，裁完调 submitDecisions 续跑结算。
         setPendingDecisions(outcome.data.decisions || []);
         setBusy("");
         return;
@@ -1001,6 +1022,7 @@ function App() {
               issues={state.issues}
               closedIssues={state.closed_this_turn || []}
               hasLegacies={(state.legacies || []).length > 0}
+              ministers={state.ministers || []}
               compact
               onOpenDrawer={() => setSituationDrawerOpen(true)}
               onChanged={() => loadState()}
@@ -1079,6 +1101,7 @@ function App() {
         closedIssues={state.closed_this_turn || []}
         maxDecreeIssues={state.max_decree_issues ?? 10}
         regions={(state.regions || []).filter((r) => (r.controlled_by ?? "ming") === "ming").map((r) => ({ id: r.id, name: r.name }))}
+        ministers={state.ministers || []}
         presetTrees={state.preset_trees}
         onChanged={() => loadState()}
         onClose={() => setSituationDrawerOpen(false)}
@@ -1103,8 +1126,10 @@ function App() {
         courtChatLiveMessages={courtChatLiveMessages}
         courtChatDecision={courtChatDecision}
         courtChatSelectedMinisters={courtChatSelectedMinisters}
+        courtChatStreamSpeed={courtChatStreamSpeed}
         onCourtChatSelectedMinistersChange={setCourtChatSelectedMinisters}
         onCourtChatInputChange={setCourtChatInput}
+        onCourtChatStreamSpeedChange={updateCourtChatStreamSpeed}
         onSendCourtChat={sendCourtChat}
         onStopCourtChat={stopCourtChat}
         onSummarizeCourtChat={summarizeCourtChat}
@@ -1163,6 +1188,7 @@ function App() {
 
       <AppointmentDrawer
         ministers={state.ministers}
+        departments={state.departments || []}
         open={appointmentDrawerOpen}
         onOpenChat={openChat}
         onClose={guardClose(() => setAppointmentDrawerOpen(false))}
@@ -1220,6 +1246,7 @@ function App() {
         <FullscreenModal title="诏书草案" subtitle="本月指令、拟诏与颁布" bgClass="modal-bg-edict" onClose={guardClose(() => setActiveModal("none"))}>
           <EdictModal
             state={state}
+            ministers={state.ministers || []}
             directiveText={directiveText}
             editingDirectiveId={editingDirectiveId}
             editingDirectiveText={editingDirectiveText}
@@ -1332,8 +1359,8 @@ const canAttendCourtChat = (minister: Minister) => {
 };
 
 
-// HITL 重大抉择弹窗：逐个亲裁本回合决策点，全部选完一次提交续跑结算。
-// 每个决策：标题 + 背景 + 2-3 预设选项（点选）+ 朱批输入框（可补自由旨意）。
+// HITL 遇阻纠偏弹窗：逐个亲裁本回合纠偏点，全部选完一次提交续跑结算。
+// 每个纠偏：标题 + 背景 + 2-3 预设选项（点选）+ 朱批输入框（可补自由旨意）。
 function DecisionModal({
   decisions,
   onResolve,
@@ -1364,10 +1391,10 @@ function DecisionModal({
   };
 
   return (
-    <div className="decision-modal" role="dialog" aria-modal="true" aria-label="月末重大抉择">
+    <div className="decision-modal" role="dialog" aria-modal="true" aria-label="月末遇阻纠偏">
       <div className="decision-window">
         <div className="decision-head">
-          <span className="decision-kicker">月末亲裁 · {cursor + 1}/{total}</span>
+          <span className="decision-kicker">遇阻纠偏 · {cursor + 1}/{total}</span>
           <h2 className="decision-title">{cur.title}</h2>
         </div>
         {cur.context ? <p className="decision-context">{cur.context}</p> : null}

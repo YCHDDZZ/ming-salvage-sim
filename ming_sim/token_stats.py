@@ -132,9 +132,48 @@ def _get_client_base_url(self_client_holder: object) -> str:
         return ""
 
 
+_DASHSCOPE_STATIC_CACHE_MIN_CHARS = 800
+
+# DashScope 显式缓存会缓存「messages 开头 → cache_control 所在 block 末尾」。
+# 这些锚点之后都是月度盘面 / 推演 payload / extractor 补充上下文等高频变化内容，
+# 不能放进显式缓存，否则每轮反复 cache_creation、很少命中。
+_DASHSCOPE_DYNAMIC_SYSTEM_MARKERS = (
+    "【本回合年月】",
+    "【本回合推演输入 simulator_payload】",
+    "【结算补充上下文 extractor_context】",
+    "当前为 ",
+    "本回合朝会盘面：",
+    "本月朝会盘面：",
+    "本旬朝会盘面：",
+    "【上回合邸报全文",
+    "【上月邸报全文",
+    "【近来朝局",
+    "【私人对话纪要",
+    "【你身上还在办的密令】",
+)
+
+
+def _dashscope_static_prefix_end(content: str) -> int:
+    """返回 system 中适合显式缓存的静态前缀长度。"""
+    dynamic_starts = [
+        idx for marker in _DASHSCOPE_DYNAMIC_SYSTEM_MARKERS
+        if (idx := content.find(marker)) >= 0
+    ]
+    return min(dynamic_starts) if dynamic_starts else len(content)
+
+
+def _text_block(text: str, cache: bool = False) -> Dict[str, object]:
+    block: Dict[str, object] = {"type": "text", "text": text}
+    if cache:
+        block["cache_control"] = {"type": "ephemeral"}
+    return block
+
+
 def _inject_dashscope_cache_mark(kwargs: Dict[str, object]) -> None:
-    """对 dashscope 请求,把 system message content 改成带 cache_control 的列表形式。
-    只标 system,不动 user/assistant(多轮对话差异在尾部,前缀缓存自动覆盖)。
+    """对 DashScope 请求只标静态 system 前缀。
+
+    cache_control 不能落在月度盘面/历史/密令/推演 payload 后面；那些内容每轮会变，
+    标进去会导致反复创建主动缓存而不命中。
     """
     messages = kwargs.get("messages")
     if not isinstance(messages, list):
@@ -145,18 +184,33 @@ def _inject_dashscope_cache_mark(kwargs: Dict[str, object]) -> None:
         if msg.get("role") != "system":
             continue
         content = msg.get("content")
-        if isinstance(content, str) and len(content) >= 800:
-            # 改写成结构化 list + cache_control
-            msg["content"] = [{
-                "type": "text",
-                "text": content,
-                "cache_control": {"type": "ephemeral"},
-            }]
+        if isinstance(content, str):
+            static_end = _dashscope_static_prefix_end(content)
+            static_text = content[:static_end]
+            if len(static_text) >= _DASHSCOPE_STATIC_CACHE_MIN_CHARS:
+                blocks = [_text_block(static_text, cache=True)]
+                dynamic_text = content[static_end:]
+                if dynamic_text:
+                    blocks.append(_text_block(dynamic_text))
+                msg["content"] = blocks
         elif isinstance(content, list) and content:
-            # 已是 list,给最后一块加 mark(若没有)
-            last = content[-1]
-            if isinstance(last, dict) and "cache_control" not in last:
-                last["cache_control"] = {"type": "ephemeral"}
+            # 兼容上游已拆 block 的情况：重组文本后按同一规则切分，避免给最后一块
+            # （通常是动态上下文）打 cache_control。
+            text = "".join(
+                str(item.get("text", ""))
+                for item in content
+                if isinstance(item, dict) and item.get("type", "text") == "text"
+            )
+            if not text:
+                break
+            static_end = _dashscope_static_prefix_end(text)
+            static_text = text[:static_end]
+            if len(static_text) >= _DASHSCOPE_STATIC_CACHE_MIN_CHARS:
+                blocks = [_text_block(static_text, cache=True)]
+                dynamic_text = text[static_end:]
+                if dynamic_text:
+                    blocks.append(_text_block(dynamic_text))
+                msg["content"] = blocks
         break  # 只标第一条 system,够前缀缓存命中
 
 

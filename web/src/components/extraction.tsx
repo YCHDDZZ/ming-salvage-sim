@@ -274,17 +274,18 @@ export function OfficeChangesBlock({ data }: { data: any }) {
 
 export function StatusChangesBlock({ data }: { data: any }) {
   if (isEmptyData(data) || !Array.isArray(data)) return <p className="extraction-empty">无</p>;
+  const applied = data.filter((it: any) => !pickItem(it, "rejected", "rejected"));
+  if (applied.length === 0) return <p className="extraction-empty">无</p>;
   const label: Record<string, string> = {
     dismissed: "罢黜", imprisoned: "下狱", exiled: "流放",
     retired: "致仕", dead: "身故", offstage: "去位",
   };
   return (
     <ul className="extraction-list">
-      {data.map((it: any, i: number) => (
+      {applied.map((it: any, i: number) => (
         <li key={i}>
-          <b className={pickItem(it, "rejected", "rejected") ? "bad" : ""}>
+          <b>
             {pickItem(it, "姓名", "name")} {label[pickItem(it, "状态", "status")] || cnValue(pickItem(it, "状态", "status"))}
-            {pickItem(it, "rejected", "rejected") ? "（未落地）" : ""}
           </b>
           {pickItem(it, "原因", "reason") ? <span>{pickItem(it, "原因", "reason")}</span> : null}
         </li>

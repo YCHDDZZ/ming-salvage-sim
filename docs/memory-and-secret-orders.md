@@ -273,7 +273,7 @@ secret_orders_for_sim = [{id, minister_name, title, content, status, result}, ..
    近5回合若有大量记忆（100条+），会全部注入大臣brief，token压力大。
    当前兜底是limit=100，若记忆量爆炸需按character过滤或降低window。
 
-2. **密令active上限20条**：超限直接报错，不降级。
+2. **密令active上限由游戏设置控制**：超限直接报错，不降级。
    若玩家密令积压多，大臣会看到报错提示，需先结案旧令。
 
 3. **chat提取时机**：月末颁诏后才提取chat记忆，当月召对内容当月无法被推演引用。

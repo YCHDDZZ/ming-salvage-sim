@@ -7,12 +7,29 @@ import { formatClosedEffect } from "../format";
 import { ManualIssueEditor } from "./situation";
 import type { ChatDisplayMessage, ChatMessage, ClosedIssue, Directive, EndingPayload, GameState, HistoryDetail, HistoryTurnItem, Minister, SecretOrder, Suggestion } from "../types";
 
+const PROGRESS_LEVEL_CN: Record<string, string> = {
+  verygood: "大进",
+  good: "有进",
+  normal: "平常",
+  bad: "受挫",
+  verybad: "大挫",
+  resolved: "已成",
+  failed: "败坏",
+};
+
+export function formatReportText(text: string): string {
+  return String(text || "").replace(/(进展：\s*)([A-Za-z_]+)/g, (_, prefix: string, raw: string) => {
+    const key = raw.toLowerCase();
+    return `${prefix}${PROGRESS_LEVEL_CN[key] || raw}`;
+  });
+}
+
 export function ReportModal({ report, onClose }: { report: string; onClose: () => void }) {
   return (
     <FullscreenModal title="月末奏疏" subtitle="推演结果" bgClass="modal-bg-state" onClose={onClose}>
       <article className="state-document modal-scroll">
         <div className="document-section">
-          <pre className="memorial-text">{report}</pre>
+          <pre className="memorial-text">{formatReportText(report)}</pre>
         </div>
       </article>
     </FullscreenModal>
@@ -458,7 +475,7 @@ export function HistoryDetailView({
       {detail.report ? (
         <section className="document-section">
           <h3 className="extraction-section-title">月末邸报奏报</h3>
-          <pre className="memorial-text">{detail.report}</pre>
+          <pre className="memorial-text">{formatReportText(detail.report)}</pre>
         </section>
       ) : null}
 
@@ -509,7 +526,7 @@ export function StateModal({ state }: { state: GameState }) {
     <article className="state-document modal-scroll">
       <section className="document-section">
         {report
-          ? <pre className="memorial-text">{report}</pre>
+          ? <pre className="memorial-text">{formatReportText(report)}</pre>
           : <div className="empty-note">尚无上月奏报。</div>}
       </section>
     </article>
@@ -751,6 +768,7 @@ export function ChatModal({
 
 export function EdictModal({
   state,
+  ministers,
   directiveText,
   editingDirectiveId,
   editingDirectiveText,
@@ -777,6 +795,7 @@ export function EdictModal({
   onIssueCreated,
 }: {
   state: GameState;
+  ministers: Minister[];
   directiveText: string;
   editingDirectiveId: number | null;
   editingDirectiveText: string;
@@ -815,6 +834,14 @@ export function EdictModal({
   );
   const maxDecreeIssues = state.max_decree_issues ?? 10;
   const decreeIssueFull = decreeIssueCount >= maxDecreeIssues;
+  const activeIssues = React.useMemo(
+    () => (state.issues || []).filter((i) => !i.status || i.status === "active"),
+    [state.issues],
+  );
+  const assignedActiveIssueCount = React.useMemo(
+    () => activeIssues.filter((i) => (i.assignee || "").trim()).length,
+    [activeIssues],
+  );
   const dialogDirective = allDirectives.find((d) => d.id === dialogDirectiveId) || null;
   const openDirectiveDialog = (directive: Directive) => {
     setDialogDirectiveId(directive.id);
@@ -844,7 +871,7 @@ export function EdictModal({
         {report ? (
           <section className="edict-gazette">
             <h2>月末奏章</h2>
-            <pre>{report}</pre>
+            <pre>{formatReportText(report)}</pre>
           </section>
         ) : null}
       </div>
@@ -946,7 +973,11 @@ export function EdictModal({
                 </div>
               )
             ))}
-            {!allDirectives.length && <div className="empty-note">本月不可空过。请先召见大臣，或在右侧御笔自拟一道指令。</div>}
+            {!allDirectives.length && (
+              <div className="empty-note">
+                无新指令。本月可直接结算，由各局势承办人照前旨推进{assignedActiveIssueCount ? ` · ${assignedActiveIssueCount} 件有承办` : ""}。
+              </div>
+            )}
           </div>
         </section>
 
@@ -1010,6 +1041,7 @@ export function EdictModal({
         <ManualIssueEditor
           editing={null}
           regions={(state.regions || []).filter((r) => (r.controlled_by ?? "ming") === "ming").map((r) => ({ id: r.id, name: r.name }))}
+          ministers={ministers}
           presetTrees={state.preset_trees}
           onClose={() => setIssueEditorOpen(false)}
           onSaved={async () => {
@@ -1020,16 +1052,17 @@ export function EdictModal({
       ) : null}
 
       <div className="desk-footer">
-        {hasPending && <small className="pending-hint">尚有 {pendingDirectives.length} 道大臣拟旨待朱批（准/驳），核定后方可拟诏。</small>}
+        {hasPending && <small className="pending-hint">尚有 {pendingDirectives.length} 道大臣拟旨待朱批（准/驳），核定后方可结算。</small>}
         <button className="seal-btn-ghost" onClick={onGoToCourtChat} disabled={!!busy}>
           <MessageSquare size={15} />去庭议
         </button>
         <button
           className="seal-btn-compose"
-          onClick={onWriteDecree}
-          disabled={!!busy || !draftDirectives.length || hasPending}
+          onClick={draftDirectives.length ? onWriteDecree : onIssueDecree}
+          disabled={!!busy || hasPending}
+          title={draftDirectives.length ? "拟写正式诏书" : "无新诏，结算本月承办推进"}
         >
-          拟诏 →
+          {draftDirectives.length ? "拟诏 →" : "结束本月"}
         </button>
       </div>
     </div>

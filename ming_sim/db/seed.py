@@ -60,9 +60,10 @@ class _SeedMixin:
                     """
                     INSERT INTO characters
                     (name, office, office_type, faction, aliases, personal_skills, loyalty, ability, integrity, courage, style,
+                     diplomacy, martial, stewardship, intrigue, learning,
                      birth_year, historical_death_year, historical_death_month, debut_year, debut_month,
                      status, status_reason, status_changed_turn, portrait_id, power_id, location, summary)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         character.name,
@@ -76,6 +77,11 @@ class _SeedMixin:
                         character.integrity,
                         character.courage,
                         character.style,
+                        character.diplomacy,
+                        character.martial,
+                        character.stewardship,
+                        character.intrigue,
+                        character.learning,
                         character.birth_year,
                         character.historical_death_year,
                         character.historical_death_month,

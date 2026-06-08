@@ -609,6 +609,20 @@ def make_issue_log_compactor(
 
 def issue_to_payload(row: sqlite3.Row, advances: List[sqlite3.Row]) -> Dict[str, object]:
     """喂给推演 agent 的事项精简视图：状态、进度、效果、完整推进日志。"""
+    def _advance_time(a: sqlite3.Row) -> Dict[str, object]:
+        turn = int(a["turn"])
+        keys = a.keys() if hasattr(a, "keys") else []
+        year = int(a["year"] or 0) if "year" in keys else 0
+        period = int(a["period"] or 0) if "period" in keys else 0
+        if year <= 0 or period <= 0:
+            month_index = 1627 * 12 + 10 + max(0, turn - 1)
+            year = month_index // 12
+            period = month_index % 12
+            if period == 0:
+                year -= 1
+                period = 12
+        return {"turn": turn, "year": year, "period": period, "time": f"{year}年{period}月"}
+
     keys = row.keys() if hasattr(row, "keys") else []
     resolve_cond = row["resolve_condition"] if "resolve_condition" in keys else ""
     fail_cond = row["fail_condition"] if "fail_condition" in keys else ""
@@ -617,7 +631,7 @@ def issue_to_payload(row: sqlite3.Row, advances: List[sqlite3.Row]) -> Dict[str,
     timeline = [
         {
             "id": int(a["id"]),
-            "turn": int(a["turn"]),
+            **_advance_time(a),
             "narrative": _compact_issue_log(a["narrative"]),
         }
         for a in advances
@@ -646,6 +660,15 @@ def issue_to_payload(row: sqlite3.Row, advances: List[sqlite3.Row]) -> Dict[str,
         payload["目标"] = goal.strip()
     if assignee.strip():
         payload["承办人"] = assignee.strip()
+    # 承办人授权：皇帝批了专款/生杀权后，承办人本月可自主推进（不必再下圣旨）。
+    budget_pool = float((row["budget_pool"] if "budget_pool" in keys else 0) or 0)
+    budget_source = str((row["budget_source"] if "budget_source" in keys else "") or "")
+    death_authority = int((row["death_authority"] if "death_authority" in keys else 0) or 0)
+    if budget_pool > 0 and budget_source in ("国库", "内库"):
+        payload["专款余额"] = round(budget_pool, 1)
+        payload["专款出库"] = budget_source
+    if death_authority:
+        payload["专断之权"] = True
     return payload
 
 
@@ -1080,7 +1103,8 @@ _FALLBACK_BUILDING_CATEGORY = "民生"
 
 def _synth_resolve_effect_for_issue(db: GameDB, row: sqlite3.Row) -> Dict[str, object]:
     """大模型漏填实体时的兜底：按 issue 的 tags 题材，自动造一个最简实体落地段。
-    工程→建筑(region_hint 或默认京师 beizhili)、政治→部门、科技→科技。题材不属三类则返回空。
+    工程→建筑(region_hint 或默认京师 beizhili)、科技→科技。政治类改革/政策不自动落部门；
+    只有 effect_on_resolve 明确写 departments:create 或命中预设部门时才新设衙门。
     名称用 issue 标题。这是「推进时发现没有 effect_on_resolve 就生成一个」的程序保底。"""
     try:
         tags = json.loads(row["tags"] or "[]")
@@ -1100,8 +1124,6 @@ def _synth_resolve_effect_for_issue(db: GameDB, row: sqlite3.Row) -> Dict[str, o
             region = "beizhili"  # 京师，必存在，作兜底选址
         return {"buildings": [{"action": "create", "region_id": region, "name": title,
                                "category": _FALLBACK_BUILDING_CATEGORY, "maintenance": 1}]}
-    if entity == "departments":
-        return {"departments": [{"action": "create", "name": title, "authority_scope": "", "power": 50}]}
     if entity == "technologies":
         return {"technologies": [{"action": "create", "name": title, "category": "科技", "effect_summary": ""}]}
     return {}
@@ -1135,10 +1157,37 @@ _ASSIGNEE_PCT_BASES = {
 }
 
 
-def _assignee_net_pct(ability: int, loyalty: int, integrity: int, courage: int) -> int:
+_ASSIGNEE_DOMAIN_KEYWORDS = {
+    "stewardship": ("税", "赋", "饷", "银", "钱", "粮", "库", "财政", "财赋", "清丈", "盐", "商", "屯田", "漕", "工", "厂", "营造", "工程"),
+    "martial": ("军", "兵", "边", "辽", "饷", "练", "营", "将", "火器", "城防", "剿", "战", "守"),
+    "diplomacy": ("士林", "民心", "舆", "名望", "安抚", "劝", "赈", "科举", "教化", "盟", "使", "贡", "抚", "议和", "外", "蒙古", "朝鲜", "后金", "女真"),
+    "learning": ("学", "书院", "历", "法", "器", "工艺", "技术", "火器", "制造", "译", "医"),
+    "intrigue": ("情报", "密", "缉", "查", "案", "党", "阉", "锦衣", "东厂", "反间", "侦"),
+}
+
+
+def _issue_domain(row: sqlite3.Row) -> str:
+    text = " ".join(
+        str((row[key] if key in row.keys() else "") or "")
+        for key in ("title", "kind", "goal", "stage_text", "bar_good_meaning", "bar_bad_meaning")
+    )
+    for domain, keywords in _ASSIGNEE_DOMAIN_KEYWORDS.items():
+        if any(keyword in text for keyword in keywords):
+            return domain
+    return "stewardship"
+
+
+def _assignee_net_pct(
+    ability: int,
+    loyalty: int,
+    integrity: int,
+    courage: int,
+    domain_score: int = 50,
+) -> int:
     """承办人百分比修正：50 为 0%；同帝国修正一样用带符号 net_pct 套基准增量。"""
     pct = (
-        (ability - 50) * _ASSIGNEE_PCT_BASES["ability"]
+        (domain_score - 50) * 1.3
+        + (ability - 50) * 0.7
         + (loyalty - 50) * _ASSIGNEE_PCT_BASES["loyalty"]
         + (integrity - 50) * _ASSIGNEE_PCT_BASES["integrity"]
         + (courage - 50) * _ASSIGNEE_PCT_BASES["courage"]
@@ -1160,7 +1209,8 @@ def _assignee_adjusted_issue_delta(db: GameDB, row: sqlite3.Row, base_delta: int
         return base_delta, ""
     ch = db.conn.execute(
         """
-        SELECT name, status, ability, loyalty, integrity, courage
+        SELECT name, status, ability, loyalty, integrity, courage,
+               diplomacy, martial, stewardship, intrigue, learning
         FROM characters WHERE name=?
         """,
         (assignee,),
@@ -1173,11 +1223,13 @@ def _assignee_adjusted_issue_delta(db: GameDB, row: sqlite3.Row, base_delta: int
         net_pct = -50
         delta = _apply_assignee_pct(base_delta, net_pct)
         return delta, f"承办人{assignee}已非在朝，基准{base_delta}按承办修正{net_pct}%折算为{delta}。"
+    domain = _issue_domain(row)
     net_pct = _assignee_net_pct(
         int(ch["ability"] or 50),
         int(ch["loyalty"] or 50),
         int(ch["integrity"] or 50),
         int(ch["courage"] or 50),
+        int(ch[domain] or 50),
     )
     delta = _apply_assignee_pct(base_delta, net_pct)
     return delta, f"承办人{assignee}基准{base_delta}按承办修正{net_pct}%折算为{delta}。"
@@ -1191,7 +1243,8 @@ def _auto_issue_delta_by_assignee(db: GameDB, row: sqlite3.Row) -> tuple[int, st
     if assignee:
         ch = db.conn.execute(
             """
-            SELECT name, office, office_type, status, ability, loyalty, integrity, courage
+            SELECT name, office, office_type, status, ability, loyalty, integrity, courage,
+                   diplomacy, martial, stewardship, intrigue, learning
             FROM characters WHERE name=?
             """,
             (assignee,),
@@ -1206,7 +1259,8 @@ def _auto_issue_delta_by_assignee(db: GameDB, row: sqlite3.Row) -> tuple[int, st
         loyalty = int(ch["loyalty"] or 50)
         integrity = int(ch["integrity"] or 50)
         courage = int(ch["courage"] or 50)
-        net_pct = _assignee_net_pct(ability, loyalty, integrity, courage)
+        domain = _issue_domain(row)
+        net_pct = _assignee_net_pct(ability, loyalty, integrity, courage, int(ch[domain] or 50))
         delta = _apply_assignee_pct(base_delta, net_pct)
         if net_pct >= 50:
             tone = "才具卓异，调度有方"
@@ -1287,10 +1341,20 @@ def apply_issue_tracker_output(
         except (TypeError, ValueError):
             continue
         base_delta_bar = int(adv.get("delta_bar") or 0)
-        if base_delta_bar == 0:
-            continue
         issue_row = db.conn.execute("SELECT * FROM issues WHERE id=?", (issue_id,)).fetchone()
         if issue_row is None or issue_row["status"] != "active":
+            continue
+        # 承办人专款支取：本{TURN_UNIT}从该 issue 专款里花了多少（extractor 抽自邸报），
+        # 实扣指定库+减池（spend_issue_budget 内按库余额/池余额 clamp）。先于进度处理，
+        # 因为「只花钱无进度增量」（base_delta_bar==0）的情形也要落账扣款。
+        try:
+            budget_spent = float(adv.get("budget_spent") or 0)
+        except (TypeError, ValueError):
+            budget_spent = 0.0
+        budget_spent_actual = 0.0
+        if budget_spent > 0:
+            budget_spent_actual = db.spend_issue_budget(state, issue_id, budget_spent)
+        if base_delta_bar == 0:
             continue
         delta_bar, assignee_note = _assignee_adjusted_issue_delta(db, issue_row, base_delta_bar)
         delta_bar = max(-50, min(50, int(delta_bar)))
@@ -1358,6 +1422,7 @@ def apply_issue_tracker_output(
             "stage_text": new_row["stage_text"],
             "status": new_row["status"],
             "narrative": narrative,
+            **({"budget_spent": round(budget_spent_actual, 1)} if budget_spent_actual > 0 else {}),
         })
 
     # 2) new_issues：接两种来源——
@@ -2068,12 +2133,12 @@ def apply_issue_inertia_and_ongoing(
             db.conn.execute(
                 """
                 INSERT INTO issue_advances (
-                    issue_id, turn, trigger_kind, delta_bar,
+                    issue_id, turn, year, period, trigger_kind, delta_bar,
                     from_value, to_value, narrative, metric_delta
-                ) VALUES (?, ?, 'ongoing', 0, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, 'ongoing', 0, ?, ?, ?, ?)
                 """,
                 (
-                    issue_id, state.turn, bar, bar,
+                    issue_id, state.turn, state.year, state.period, bar, bar,
                     f"持续效果落账 (折扣 {int(scale*100)}%)",
                     json.dumps({"metrics": metric_part, "economy": economy_part}, ensure_ascii=False),
                 ),

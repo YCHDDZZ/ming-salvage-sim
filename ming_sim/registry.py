@@ -16,6 +16,7 @@ from agno.skills.loaders.local import LocalSkills
 from ming_sim.constants import TURN_UNIT
 from ming_sim.content import GameContent
 from ming_sim.context import character_context_with_db
+from ming_sim.llm_config import agent_sampling_settings
 from ming_sim.models import Character, CourtContext, LLMConfig
 from ming_sim.llm_model import create_chat_model
 from ming_sim.token_stats import tlog
@@ -401,8 +402,8 @@ def create_minister_agent(
     agno_db: SqliteDb,
     session_id: Optional[str] = None,
 ) -> Agent:
-    # temperature 0.6：保留人物个性，但收敛发挥——少在拟旨里夹带题外私货。
-    model = create_chat_model(llm_config, temperature=0.6, top_p=0.9)
+    temperature, top_p = agent_sampling_settings("minister")
+    model = create_chat_model(llm_config, temperature=temperature, top_p=top_p)
     # 缓存策略：instructions 全部静态化（仅依赖 character，不依赖每月 state/events）。
     # game_world / minister_agent prompt、character 档案 跨月完全相同 → DeepSeek 前缀缓存命中。
     # 每月动态上下文（钱粮、奏报、地区、军队、派系）由 MinisterRegistry 在 agent 创建后通过首轮

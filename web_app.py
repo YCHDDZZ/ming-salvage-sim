@@ -811,6 +811,11 @@ class WebGame:
             "ability": character.ability,
             "integrity": character.integrity,
             "courage": character.courage,
+            "diplomacy": character.diplomacy,
+            "martial": character.martial,
+            "stewardship": character.stewardship,
+            "intrigue": character.intrigue,
+            "learning": character.learning,
             "style": character.style,
             "location": character.location,
             "birth_year": character.birth_year,
@@ -988,6 +993,9 @@ class WebGame:
                 "duration_turns": int(row["duration_turns"] or 0) if "duration_turns" in row.keys() else 0,
                 "goal": (row["goal"] if "goal" in row.keys() else "") or "",
                 "assignee": (row["assignee"] if "assignee" in row.keys() else "") or "",
+                "budget_pool": round(float(row["budget_pool"] or 0), 1) if "budget_pool" in row.keys() else 0.0,
+                "budget_source": (row["budget_source"] if "budget_source" in row.keys() else "") or "",
+                "death_authority": bool(row["death_authority"]) if "death_authority" in row.keys() else False,
                 "origin_turn": int(row["origin_turn"] or 0),
             })
         return payloads
@@ -1168,6 +1176,7 @@ class WebGame:
             "events": [],
             "regions": regions,
             "armies": self.db.army_payload(),
+            "departments": self.db.department_payload(),
             "technologies": self.db.technology_payload(),
             "preset_trees": _preset_tree_payload(self),
             "map_nodes": self.map_nodes(regions),
@@ -2364,10 +2373,23 @@ class GameSettingsRequest(BaseModel):
     hitl_min_decisions: int = 1
     # 朝会聊天室 ReAct 交锋轮数，未形成结论前继续驱动 agent；默认 3。
     court_chat_debate_rounds: int = 3
+    # 朝会流式输出速度档位，1-5。默认 3。
+    court_chat_stream_speed: int = 3
     # decree 来源 active 局势同时进行上限；默认 10，调高增加推演 token 消耗。
     max_decree_issues: int = 10
     # 每条 active 局势注入推演的最近推进日志条数。0=不带推进日志。
     issue_log_limit: int = 6
+    # 单个承办人同时进行中的密令上限；默认 1。
+    secret_order_person_limit: int = 1
+    # 全朝同时进行中的密令总上限；默认 5。
+    secret_order_total_limit: int = 5
+    # 大臣 / 推演 / 结算三个核心 agent 的采样参数。
+    minister_temperature: float = 0.6
+    minister_top_p: float = 0.9
+    simulator_temperature: float = 0.5
+    simulator_top_p: float = 0.5
+    extractor_temperature: float = 0.1
+    extractor_top_p: float = 0.1
 
 
 @app.get("/api/menu/game_settings")
@@ -2382,8 +2404,17 @@ async def api_menu_save_game_settings(request: GameSettingsRequest) -> Dict[str,
     saved = save_runtime_game(
         request.hitl_min_decisions,
         request.court_chat_debate_rounds,
+        request.court_chat_stream_speed,
         request.max_decree_issues,
         request.issue_log_limit,
+        request.secret_order_person_limit,
+        request.secret_order_total_limit,
+        request.minister_temperature,
+        request.minister_top_p,
+        request.simulator_temperature,
+        request.simulator_top_p,
+        request.extractor_temperature,
+        request.extractor_top_p,
     )
     return {"ok": True, "game_settings": saved}
 
@@ -2442,8 +2473,6 @@ class ManualIssueEntity(BaseModel):
 class ManualIssueCreateRequest(BaseModel):
     # 名称（局势标题），必填。
     title: str = ""
-    # 持续回合数；0=无硬期限，>0 到期自动撤销（无奖励）。
-    duration_turns: int = 0
     # 目标：皇帝给该局势定的方向意图，喂给推演逐月推进。立项后锁定不可改。
     goal: str = ""
     # 承办人：主责大臣姓名。推演按其职掌、能力、状态自动推进或恶化。
@@ -2457,8 +2486,17 @@ class ManualIssueCreateRequest(BaseModel):
 class ManualIssueUpdateRequest(BaseModel):
     # 注意：goal 立项后锁定，不在此可改。
     title: Optional[str] = None
-    duration_turns: Optional[int] = None
     assignee: Optional[str] = None
+
+
+class IssueAssigneeUpdateRequest(BaseModel):
+    assignee: str = ""
+
+
+class IssueAuthorizationRequest(BaseModel):
+    budget_add: float = 0      # 本次追加专款万两（累加进 budget_pool）
+    budget_source: str = ""    # 专款出库：'国库' / '内库' / ''(不改)
+    death_authority: bool = False  # 专断之权（生杀权）开关
 
 
 def _build_manual_resolve_effect(entity: "ManualIssueEntity | None", title: str) -> dict:
@@ -2660,24 +2698,51 @@ async def api_create_manual_issue(request: ManualIssueCreateRequest) -> Dict[str
         resolve_condition=str(preset_override.get("resolve_condition") or ""),
         fail_condition=str(preset_override.get("fail_condition") or ""),
         is_manual=True,
-        duration_turns=max(0, int(request.duration_turns or 0)),
+        duration_turns=0,
         goal=str(request.goal or preset_override.get("goal") or "").strip(),
         assignee=str(request.assignee or "").strip(),
     )
     print(f"[issue/api] 手动新建局势 id={issue_id} title={title!r} tags={tags} 预埋effect={resolve_effect}")
-    return {"id": issue_id, "title": title, "duration_turns": max(0, int(request.duration_turns or 0))}
+    return {"id": issue_id, "title": title, "duration_turns": 0}
 
 
 @app.patch("/api/issues/manual/{issue_id}")
 async def api_update_manual_issue(issue_id: int, request: ManualIssueUpdateRequest) -> Dict[str, Any]:
-    """改手动 decree 局势：名称 / 持续回合数。goal 立项后锁定，不可改。"""
+    """改手动 decree 局势：名称 / 承办人。goal 立项后锁定，不可改。"""
     ok = get_game().db.update_manual_issue(
-        issue_id, title=request.title, duration_turns=request.duration_turns, assignee=request.assignee
+        issue_id, title=request.title, assignee=request.assignee
     )
     if not ok:
         raise HTTPException(status_code=404, detail=f"未找到可改的手动局势 #{issue_id}（仅手动新建且进行中的可改）")
-    print(f"[issue/api] 改手动局势 id={issue_id} title={request.title!r} duration={request.duration_turns}")
+    print(f"[issue/api] 改手动局势 id={issue_id} title={request.title!r} assignee={request.assignee!r}")
     return {"updated": True, "id": issue_id}
+
+
+@app.patch("/api/issues/{issue_id}/assignee")
+async def api_update_issue_assignee(issue_id: int, request: IssueAssigneeUpdateRequest) -> Dict[str, Any]:
+    """改任意 active 局势的承办人。"""
+    ok = get_game().db.update_issue_assignee(issue_id, request.assignee)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"未找到可改的在办局势 #{issue_id}")
+    print(f"[issue/api] 改局势承办人 id={issue_id} assignee={request.assignee!r}")
+    return {"updated": True, "id": issue_id, "assignee": request.assignee.strip()}
+
+
+@app.post("/api/issues/{issue_id}/authorization")
+async def api_set_issue_authorization(issue_id: int, request: IssueAuthorizationRequest) -> Dict[str, Any]:
+    """给 active 局势的承办人设授权：追加专款（指定出库）、开/关生杀权。
+    承办人此后每月自主从专款推进，不必皇帝再下圣旨。"""
+    result = get_game().db.set_issue_authorization(
+        issue_id,
+        budget_add=request.budget_add,
+        budget_source=request.budget_source,
+        death_authority=request.death_authority,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"未找到可改的在办局势 #{issue_id}")
+    print(f"[issue/api] 设局势授权 id={issue_id} 追加={request.budget_add}万两 出库={request.budget_source!r} "
+          f"生杀权={request.death_authority} → 池余={result['budget_pool']}")
+    return {"updated": True, "id": issue_id, **result}
 
 
 @app.delete("/api/issues/manual/{issue_id}")
@@ -2983,6 +3048,7 @@ async def api_issue_decree(body: IssueDecreeRequest = IssueDecreeRequest()) -> D
     """非流式颁诏（保留兼容）。前端默认走 /api/decree/issue/stream。"""
     game = get_game()
     was_ended = bool(game.state.ended)
+    issued_decree = bool(game.session.db.list_directives(game.state, statuses=("draft",)))
     try:
         result = game.session.resolve_turn(cheat_directive=body.cheat)
     except ValueError as e:
@@ -2995,10 +3061,11 @@ async def api_issue_decree(body: IssueDecreeRequest = IssueDecreeRequest()) -> D
     report = result.report
     game.refresh_turn()
     events = [
-        steam_events.add_stat(steam_events.STAT_DECREES_ISSUED),
         steam_events.add_stat(steam_events.STAT_TURNS_PLAYED),
         steam_events.set_stat(steam_events.STAT_MAX_TURN_REACHED, int(game.state.turn)),
     ]
+    if issued_decree:
+        events.insert(0, steam_events.add_stat(steam_events.STAT_DECREES_ISSUED))
     if not was_ended and game.state.ended:
         events.append(steam_events.add_stat(steam_events.STAT_ENDINGS_REACHED))
     return steam_events.with_events({"decree": decree, "report": report, "state": game.state_payload()}, events)
@@ -3021,6 +3088,7 @@ async def api_issue_decree_stream(body: IssueDecreeRequest = IssueDecreeRequest(
         try:
             game = get_game()
             was_ended = bool(game.state.ended)
+            issued_decree = bool(game.session.db.list_directives(game.state, statuses=("draft",)))
             result = game.session.resolve_turn(on_event=on_event, cheat_directive=body.cheat)
             decree = game.session.last_decree
             if result.awaiting:
@@ -3034,10 +3102,11 @@ async def api_issue_decree_stream(body: IssueDecreeRequest = IssueDecreeRequest(
             report = result.report
             game.refresh_turn()
             events = [
-                steam_events.add_stat(steam_events.STAT_DECREES_ISSUED),
                 steam_events.add_stat(steam_events.STAT_TURNS_PLAYED),
                 steam_events.set_stat(steam_events.STAT_MAX_TURN_REACHED, int(game.state.turn)),
             ]
+            if issued_decree:
+                events.insert(0, steam_events.add_stat(steam_events.STAT_DECREES_ISSUED))
             if not was_ended and game.state.ended:
                 events.append(steam_events.add_stat(steam_events.STAT_ENDINGS_REACHED))
             ev_queue.put(("__done__", {

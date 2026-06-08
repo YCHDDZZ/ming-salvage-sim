@@ -68,7 +68,10 @@ DECISION_NARRATIVE_PREFIX = (
 )
 
 # 决策块边界标记。simulator 在邸报末尾按规范输出，本回合解析后从 narrative 剥离。
-_DECISION_RE = re.compile(r"<<DECISION>>\s*(\{.*?\})\s*<<END>>", re.DOTALL)
+# group(1) 抓 <<DECISION>> 与 <<END>> 之间的全部内容（含带嵌套 options 的多层 JSON）——
+# 不能用 \{.*?\} 抠 JSON：options:[{...},{...}] 有嵌套 }，非贪婪会在第一个 } 截断、
+# 导致整块匹配失败、决策块剥不掉而原文泄露到前端。JSON 边界交给 json.loads 判。
+_DECISION_RE = re.compile(r"<<DECISION>>\s*(.*?)\s*<<END>>", re.DOTALL)
 MAX_DECISIONS_PER_TURN = 5
 
 
@@ -218,10 +221,6 @@ def resolve_directives(
     def _emit(kind: str, data: str) -> None:
         if on_event:
             on_event(kind, data)
-
-    if not directives:
-        advance_without_edict(state, db)
-        return ResolveResult(awaiting=False, report=f"本{TURN_UNIT}未颁正式诏书。")
 
     before_turn = state.turn
 
@@ -500,7 +499,10 @@ def _settle_after_narrative(
         ending = f"\n\n【结局·{label}】{outcome.get('summary', '')}"
         if ending_text:
             ending += "\n\n" + ending_text
-    full_report = f"\n本{TURN_UNIT}颁布诏书：\n" + decree_text + "\n\n" + narrative + ending
+    if decree_text.strip().startswith(f"本{TURN_UNIT}无新诏"):
+        full_report = f"\n本{TURN_UNIT}无新诏，承办推进：\n" + decree_text + "\n\n" + narrative + ending
+    else:
+        full_report = f"\n本{TURN_UNIT}颁布诏书：\n" + decree_text + "\n\n" + narrative + ending
     return full_report
 
 

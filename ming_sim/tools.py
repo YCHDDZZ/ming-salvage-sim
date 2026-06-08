@@ -351,7 +351,7 @@ def build_minister_tools(character: Character, context: CourtContext,
     ) -> str:
         """密令统一入口。action 取值：
         - "issue"：下达新密令。需填 title、content；assignee 留空默认当前大臣；deadline_months=0 无硬限。
-                  限制：不得重复下同一道密令；一个承办人同一时间只能有一条进行中密令；全朝进行中密令最多 5 条。
+                  限制：不得重复下同一道密令；进行中密令的个人上限与全朝总上限以游戏设置为准。
         - "progress"：汇报进展（兼查历史）。填 order_id；progress 非空且本月未推进则落档。
         - "submit"：提交结案。填 order_id、claim（办结陈词200字内）。
         - "rush"：催办加急。填 order_id；deadline_months=1 下月核议，0=本月即核。
@@ -822,9 +822,11 @@ def build_extractor_tools(context: CourtContext):
                             decree_text明文"纳/册封/封/选 某某 为 位号"才立；朝臣一律不进此字段
         character_status_changes  大臣状态变更 [{name,status,reason}]
                             status 直接写中文：罢黜/下狱/流放/致仕/身故/离场
+                            name 必须逐字出现在本月 decree_text 或 narrative 原文里；
                             邸报明文写到此人此事才立；既已罢黜/身故的不重复
         office_changes      朝臣官职变更 [{name,new_office,reason,可选faction/new_office_type}]
                             任何人任某官（新进朝堂/调任/升迁）一律走此字段，不分新旧任
+                            name 必须逐字出现在本月 decree_text 或 narrative 原文里；
                             new_office必须是明制实官名；去职走character_status_changes
 
         ══ 档位判定标准 ══

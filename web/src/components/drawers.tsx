@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Check, Crown, Info, Landmark, MapPinned, MessageSquareText, ScrollText, Star, Swords, X } from "lucide-react";
 import { MinisterPortrait, PortraitUploadButton, RightDrawer, cacheBust, courtSlots, loadCourtPos, saveCourtPos, snapToSlot } from "./hud";
 import { formatMoney, formatSignedMoney, regionMonthlyTax } from "../format";
-import type { Army, Building, CourtChatMessage, GameState, Issue, MapNode, Minister, Region, Technology } from "../types";
+import type { Army, Building, CourtChatMessage, Department, GameState, Issue, MapNode, Minister, Region, Technology } from "../types";
 
 const canAttendCourtChat = (minister: Minister) => {
   const office = (minister.office || "").trim();
@@ -694,11 +694,13 @@ export function EconomyDrawer({
 
 export function AppointmentDrawer({
   ministers,
+  departments = [],
   open,
   onOpenChat,
   onClose,
 }: {
   ministers: Minister[];
+  departments?: Department[];
   open: boolean;
   onOpenChat: (minister: Minister) => void;
   onClose: () => void;
@@ -706,12 +708,15 @@ export function AppointmentDrawer({
   const [q, setQ] = React.useState("");
   const [detailMinister, setDetailMinister] = React.useState<Minister | null>(null);
   const BASE_OFFICES = ["内阁", "吏部", "户部", "礼部", "兵部", "刑部", "工部"];
-  // 新设衙门（军机处/财政部等）：从在职大臣的 office_type 动态收集，排在基础六部之后、「其他」之前。
+  const departmentNames = new Set(departments.map((d) => (d.name || "").trim()).filter(Boolean));
+  // 新设衙门（军机处/情报司等）以 DB 部门表为准；兼容旧存档里只有在职大臣 office_type 的动态部门。
   const extraOffices = [...new Set(
-    ministers
-      .filter((m) => (m.power_id || "ming") === "ming" && m.status === "active")
-      .map((m) => (m.office_type || "").trim())
-      .filter((t) => t && t !== "后宫" && !BASE_OFFICES.includes(t))
+    [
+      ...departments.map((d) => (d.name || "").trim()),
+      ...ministers
+        .filter((m) => (m.power_id || "ming") === "ming" && m.status === "active")
+        .map((m) => (m.office_type || "").trim()),
+    ].filter((t) => t && t !== "后宫" && !BASE_OFFICES.includes(t))
   )];
   const offices = [...BASE_OFFICES, ...extraOffices];
   const byOffice = new Map<string, Minister[]>();
@@ -735,11 +740,11 @@ export function AppointmentDrawer({
       <div className="right-drawer-list">
         {[...offices, "其他"].map((office) => {
           const group = byOffice.get(office) || [];
-          if (!group.length) return null;
+          if (!group.length && (office === "其他" || !departmentNames.has(office))) return null;
           return (
             <div key={office}>
               <div className="right-drawer-section-title">{office}</div>
-              {group.map((m) => (
+              {group.length ? group.map((m) => (
                 <button
                   key={m.name}
                   className="right-drawer-row right-drawer-row-minister"
@@ -764,7 +769,7 @@ export function AppointmentDrawer({
                     <span className="right-drawer-minister-office">{m.office || m.office_type}</span>
                   </div>
                 </button>
-              ))}
+              )) : <div className="empty-note">暂无在职官员。</div>}
             </div>
           );
         })}
@@ -854,6 +859,9 @@ export function MinisterDetailDialog({
                 <tr><th>生卒</th><td>{lifeText}</td><th>登场</th><td>{debutText}</td></tr>
                 <tr><th>忠诚</th><td>{minister.loyalty ?? "未载"}</td><th>才干</th><td>{minister.ability ?? "未载"}</td></tr>
                 <tr><th>操守</th><td>{minister.integrity ?? "未载"}</td><th>胆略</th><td>{minister.courage ?? "未载"}</td></tr>
+                <tr><th>外交</th><td>{minister.diplomacy ?? "未载"}</td><th>军事</th><td>{minister.martial ?? "未载"}</td></tr>
+                <tr><th>管理</th><td>{minister.stewardship ?? "未载"}</td><th>谋略</th><td>{minister.intrigue ?? "未载"}</td></tr>
+                <tr><th>学识</th><td>{minister.learning ?? "未载"}</td><th></th><td></td></tr>
                 <tr><th className="intel-section-th" colSpan={4}>人物简介</th></tr>
                 <tr><td colSpan={4}>{minister.description || minister.summary || "未载。"}</td></tr>
                 <tr><th>别名</th><td colSpan={3}>{minister.aliases?.length ? minister.aliases.join("、") : "无"}</td></tr>
@@ -906,8 +914,10 @@ export function CourtDrawer({
   courtChatLiveMessages,
   courtChatDecision,
   courtChatSelectedMinisters,
+  courtChatStreamSpeed,
   onCourtChatSelectedMinistersChange,
   onCourtChatInputChange,
+  onCourtChatStreamSpeedChange,
   onSendCourtChat,
   onStopCourtChat,
   onSummarizeCourtChat,
@@ -933,8 +943,10 @@ export function CourtDrawer({
   courtChatLiveMessages: CourtChatMessage[];
   courtChatDecision: CourtChatMessage | null;
   courtChatSelectedMinisters: string[];
+  courtChatStreamSpeed: number;
   onCourtChatSelectedMinistersChange: React.Dispatch<React.SetStateAction<string[]>>;
   onCourtChatInputChange: (value: string) => void;
+  onCourtChatStreamSpeedChange: (value: number) => void;
   onSendCourtChat: (ministers: Minister[], overrideMessage?: string) => void;
   onStopCourtChat: () => void;
   onSummarizeCourtChat: (ministers: Minister[]) => void;
@@ -1162,6 +1174,19 @@ export function CourtDrawer({
                 ) : null}
               </div>
               <footer className="court-chat-panel-composer">
+                <div className="court-chat-speed-control" title="调整朝会流式输出速度">
+                  <span>奏对速度</span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={5}
+                    step={1}
+                    value={courtChatStreamSpeed}
+                    onChange={(e) => onCourtChatStreamSpeedChange(Number(e.target.value))}
+                    aria-label="朝会流式输出速度"
+                  />
+                  <b>{courtChatStreamSpeed}</b>
+                </div>
                 <button className="court-chat-history-btn" onClick={() => setShowHistory((v) => !v)} title="查看本月朝会聊天历史">
                   <MessageSquareText size={16} />
                   <span>{courtChatHistory.length}</span>

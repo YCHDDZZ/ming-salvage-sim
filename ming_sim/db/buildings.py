@@ -361,7 +361,7 @@ class _BuildingsMixin:
         """玩家新设衙门清单（origin='issue'），供 simulator/extractor。预设六部内阁不重复喂。"""
         rows = self.conn.execute(
             "SELECT office_type, authority_scope, power, responsibility, corruption_risk "
-            "FROM offices WHERE origin = 'issue' ORDER BY office_type"
+            "FROM offices WHERE origin = 'issue' AND trim(authority_scope) <> '' ORDER BY office_type"
         ).fetchall()
         return [
             {

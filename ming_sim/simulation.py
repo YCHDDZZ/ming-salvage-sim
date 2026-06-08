@@ -137,6 +137,7 @@ ITEM_FIELD_ALIASES = {
     "key": "key", "键": "key",
     "issue_id": "issue_id", "局势编号": "issue_id",
     "delta_bar": "delta_bar", "进度增量": "delta_bar",
+    "budget_spent": "budget_spent", "专款支取": "budget_spent", "专款花费": "budget_spent",
     "stage_text": "stage_text", "阶段": "stage_text",
     "narrative": "narrative", "叙述": "narrative",
     "inertia_delta": "inertia_delta", "惯性增量": "inertia_delta",
@@ -326,11 +327,34 @@ def build_simulator_payload(
     secret_orders: Optional[List[Dict[str, object]]] = None,
 ) -> Dict[str, object]:
     active = db.list_active_issues()
+    assignee_names = sorted({
+        str(r["assignee"] or "").strip()
+        for r in active
+        if "assignee" in r.keys() and str(r["assignee"] or "").strip()
+    })
     issue_log_limit = _load_issue_log_limit()
     issues_payload = [
         issue_to_payload(row, db.list_issue_advances(int(row["id"]))[-issue_log_limit:] if issue_log_limit > 0 else [])
         for row in active
     ]
+    assignee_names = sorted({
+        str(row["assignee"] or "").strip()
+        for row in active
+        if "assignee" in row.keys() and str(row["assignee"] or "").strip()
+    })
+    issue_assignees = _auto_table([
+        dict(r) for r in db.conn.execute(
+            """
+            SELECT name,office,office_type,status,ability,loyalty,integrity,courage,
+                   diplomacy,martial,stewardship,intrigue,learning,
+                   faction,personal_skills,style
+            FROM characters
+            WHERE name IN ({})
+            ORDER BY name
+            """.format(",".join("?" for _ in assignee_names)),
+            assignee_names,
+        ).fetchall()
+    ]) if assignee_names else _auto_table([])
     # 帝国修正不进 simulator payload：它是纯机械的百分比修正符，由落账层自动放大/缩小增量，不进叙事。
     candidate_events = [
         {
@@ -386,6 +410,7 @@ def build_simulator_payload(
         "classes_brief": db.class_report(),
         "powers_brief": db.power_report(exclude_self=True),
         "active_issues": issues_payload,
+        "issue_assignees": issue_assignees,
         "candidate_events": candidate_events,
         "historical_anchor": historical_anchor_for_month(state.year, state.period),
         "victory_status": victory_status(db, state),
@@ -502,7 +527,8 @@ MODULE_FIELDS: Dict[str, set[str]] = {
     "military_external": {"army_delta", "new_armies", "power_updates", "world_advance"},
     "issues": {"issue_advances", "new_issues", "cancels", "close_issues"},
     "personnel_secret": {
-        "character_changes", "appointments",
+        "character_changes", "office_changes", "character_status_changes",
+        "character_power_changes", "appointments",
         "secret_order_updates", "secret_order_closes", "emperor_fate",
     },
 }
@@ -517,6 +543,11 @@ def _extractor_context_payload(
     secret_orders: Optional[List[Dict[str, object]]] = None,
 ) -> Dict[str, object]:
     active = db.list_active_issues()
+    assignee_names = sorted({
+        str(r["assignee"] or "").strip()
+        for r in active
+        if "assignee" in r.keys() and str(r["assignee"] or "").strip()
+    })
 
     def _issue_auto_economy(row) -> List[Dict[str, object]]:
         """该 issue 每回合 ongoing_effects 里的固定经济支出/收入。
@@ -591,6 +622,19 @@ def _extractor_context_payload(
             "SELECT name,office,office_type,faction,power_id,location FROM characters WHERE status='active' ORDER BY rowid"
         ).fetchall()
     ]
+    issue_assignees = _auto_table([
+        dict(r) for r in db.conn.execute(
+            """
+            SELECT name,office,office_type,status,ability,loyalty,integrity,courage,
+                   diplomacy,martial,stewardship,intrigue,learning,
+                   faction,personal_skills,style
+            FROM characters
+            WHERE name IN ({})
+            ORDER BY name
+            """.format(",".join("?" for _ in assignee_names)),
+            assignee_names,
+        ).fetchall()
+    ]) if assignee_names else _auto_table([])
     offstage_ministers = [
         dict(r) for r in db.conn.execute(
             "SELECT name,office,faction,power_id,location,debut_year,debut_month "
@@ -602,6 +646,7 @@ def _extractor_context_payload(
         "narrative": narrative,
         "decree_text": decree_text,
         "active_issues": issues_brief,
+        "issue_assignees": issue_assignees,
         "issue_auto_economy": issue_auto_economy,
         "candidate_events": [{"id": ev.id, "title": ev.title} for ev in gather_candidate_events(state, db)],
         "current_state": dict(state.metrics),
@@ -636,6 +681,7 @@ def _extractor_compat_payload(base: Dict[str, object]) -> Dict[str, object]:
         "narrative": base["narrative"],
         "decree_text": base["decree_text"],
         "active_issues": base["active_issues"],
+        "issue_assignees": base["issue_assignees"],
         "issue_auto_economy": base["issue_auto_economy"],
         "candidate_events": base["candidate_events"],
         "current_state": base["current_state"],
@@ -705,7 +751,7 @@ def build_extractor_shared_context(
         "盘面、诏书、在朝大臣、势力/派系/阶级态势已在 system 的 simulator_payload 中给出"
         "（盘面表 regions/armies/buildings 走 TSV；court_roster 即在朝大臣；"
         "powers_brief/factions_brief/classes_brief 即势力/派系/阶级），抽取时直接读 simulator_payload。"
-        "本 extractor_context 只补：校验用 id 集（region_ids/army_ids/class_names/power_ids）、"
+        "本 extractor_context 只补：issue_assignees（承办人四维）、校验用 id 集（region_ids/army_ids/class_names/power_ids）、"
         "fiscal_config、region_fiscal_field_note、economy_system/fiscal_reference（当前财政公式/月额）、"
         "offstage_ministers（离场名册，court_roster 不含，任命查重用）。"
     )
@@ -792,6 +838,46 @@ def _sanitize_module_output(
         cleaned["fiscal_removes"] = _clean_fiscal_removes(cleaned.get("fiscal_removes"))
     if module == "military_external":
         cleaned["world_advance"] = _clean_world_advance(cleaned.get("world_advance"))
+    return cleaned
+
+
+_PERSONNEL_NAME_FIELDS = (
+    "character_changes",
+    "office_changes",
+    "character_status_changes",
+    "character_power_changes",
+)
+
+
+def filter_unmentioned_personnel_changes(
+    extracted: Dict[str, object],
+    *,
+    decree_text: str = "",
+    narrative: str = "",
+) -> Dict[str, object]:
+    """Drop personnel changes whose name is absent from this turn's decree/report text."""
+    if not isinstance(extracted, dict):
+        return {}
+    source_text = f"{decree_text}\n{narrative}"
+    if not source_text.strip():
+        return dict(extracted)
+
+    cleaned = dict(extracted)
+    for field in _PERSONNEL_NAME_FIELDS:
+        items = cleaned.get(field)
+        if not isinstance(items, list):
+            continue
+        kept: List[object] = []
+        for item in items:
+            if not isinstance(item, dict):
+                kept.append(item)
+                continue
+            name = str(item.get("name") or item.get("姓名") or "").strip()
+            if not name or name in source_text:
+                kept.append(item)
+            else:
+                print(f"[WARN] extractor {field}: '{name}' 未见于本回合诏书/邸报，已过滤。")
+        cleaned[field] = kept
     return cleaned
 
 
@@ -1174,6 +1260,11 @@ def extract_scores_by_modules_with_agno(
             fiscal_config=base_payload.get("fiscal_config") if isinstance(base_payload.get("fiscal_config"), dict) else None,
         )
     merged = _merge_module_outputs(module_outputs)
+    merged = filter_unmentioned_personnel_changes(
+        merged,
+        decree_text=decree_text,
+        narrative=narrative,
+    )
     localized_merged = _localized_extraction(merged)
     trace_input = {
         "mode": "modular",

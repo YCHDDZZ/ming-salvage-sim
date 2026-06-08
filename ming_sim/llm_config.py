@@ -17,9 +17,26 @@ RUNTIME_GAME_PATH = user_data_path("runtime_game.json")
 GAME_SETTINGS_DEFAULTS = {
     "hitl_min_decisions": 1,  # 每回合 simulator 最多产出的重大决策点数（0=关闭 HITL 注入）
     "court_chat_debate_rounds": 3,  # 朝会聊天室未形成结论前最多驱动几轮 ReAct 交锋。
+    "court_chat_stream_speed": 3,  # 朝会流式输出速度档位，1=慢，5=快。
     "max_decree_issues": 10,  # decree 来源 active 局势同时进行上限。调高会增加推演 token 消耗。
     "issue_log_limit": 6,  # 每条 active 局势注入推演的最近推进日志条数。
+    "secret_order_person_limit": 1,  # 单个承办人同时进行中的密令上限。
+    "secret_order_total_limit": 5,  # 全朝同时进行中的密令总上限。
+    "minister_temperature": 0.6,  # 大臣 agent 采样温度。
+    "minister_top_p": 0.9,  # 大臣 agent nucleus sampling。
+    "simulator_temperature": 0.5,  # 推演 agent 采样温度。
+    "simulator_top_p": 0.5,  # 推演 agent nucleus sampling。
+    "extractor_temperature": 0.1,  # 结算 extractor agent 采样温度。
+    "extractor_top_p": 0.1,  # 结算 extractor agent nucleus sampling。
 }
+
+
+def _clamp_float(value: object, default: float, lo: float = 0.0, hi: float = 1.0) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, parsed))
 
 
 def normalize_openai_base_url(base_url: str) -> str:
@@ -179,6 +196,10 @@ def load_runtime_game() -> Dict[str, object]:
     except (TypeError, ValueError):
         pass
     try:
+        out["court_chat_stream_speed"] = max(1, min(5, int(data.get("court_chat_stream_speed", out["court_chat_stream_speed"]))))
+    except (TypeError, ValueError):
+        pass
+    try:
         out["max_decree_issues"] = max(1, min(30, int(data.get("max_decree_issues", out["max_decree_issues"]))))
     except (TypeError, ValueError):
         pass
@@ -186,22 +207,68 @@ def load_runtime_game() -> Dict[str, object]:
         out["issue_log_limit"] = max(0, min(50, int(data.get("issue_log_limit", out["issue_log_limit"]))))
     except (TypeError, ValueError):
         pass
+    try:
+        out["secret_order_person_limit"] = max(1, min(10, int(data.get("secret_order_person_limit", out["secret_order_person_limit"]))))
+    except (TypeError, ValueError):
+        pass
+    try:
+        out["secret_order_total_limit"] = max(1, min(50, int(data.get("secret_order_total_limit", out["secret_order_total_limit"]))))
+    except (TypeError, ValueError):
+        pass
+    for key in (
+        "minister_temperature",
+        "minister_top_p",
+        "simulator_temperature",
+        "simulator_top_p",
+        "extractor_temperature",
+        "extractor_top_p",
+    ):
+        out[key] = _clamp_float(data.get(key, out[key]), float(out[key]), 0.0, 1.0)
     return out
+
+
+def agent_sampling_settings(agent_key: str) -> tuple[float, float]:
+    """读取 agent temperature/top_p。agent_key: minister / simulator / extractor。"""
+    settings = load_runtime_game()
+    default_temperature = float(GAME_SETTINGS_DEFAULTS.get(f"{agent_key}_temperature", 0.2))
+    default_top_p = float(GAME_SETTINGS_DEFAULTS.get(f"{agent_key}_top_p", 0.2))
+    return (
+        _clamp_float(settings.get(f"{agent_key}_temperature"), default_temperature, 0.0, 1.0),
+        _clamp_float(settings.get(f"{agent_key}_top_p"), default_top_p, 0.0, 1.0),
+    )
 
 
 def save_runtime_game(
     hitl_min_decisions: int,
     court_chat_debate_rounds: int = 3,
+    court_chat_stream_speed: int = 3,
     max_decree_issues: int = 10,
     issue_log_limit: int = 6,
+    secret_order_person_limit: int = 1,
+    secret_order_total_limit: int = 5,
+    minister_temperature: float = 0.6,
+    minister_top_p: float = 0.9,
+    simulator_temperature: float = 0.5,
+    simulator_top_p: float = 0.5,
+    extractor_temperature: float = 0.1,
+    extractor_top_p: float = 0.1,
 ) -> Dict[str, object]:
     """写 data/runtime_game.json。各项 clamp 到合法区间。返回落盘后的设置。"""
     os.makedirs(os.path.dirname(RUNTIME_GAME_PATH), exist_ok=True)
     payload = {
         "hitl_min_decisions": max(0, min(5, int(hitl_min_decisions))),
         "court_chat_debate_rounds": max(1, min(8, int(court_chat_debate_rounds))),
+        "court_chat_stream_speed": max(1, min(5, int(court_chat_stream_speed))),
         "max_decree_issues": max(1, min(30, int(max_decree_issues))),
         "issue_log_limit": max(0, min(50, int(issue_log_limit))),
+        "secret_order_person_limit": max(1, min(10, int(secret_order_person_limit))),
+        "secret_order_total_limit": max(1, min(50, int(secret_order_total_limit))),
+        "minister_temperature": _clamp_float(minister_temperature, 0.6, 0.0, 1.0),
+        "minister_top_p": _clamp_float(minister_top_p, 0.9, 0.0, 1.0),
+        "simulator_temperature": _clamp_float(simulator_temperature, 0.5, 0.0, 1.0),
+        "simulator_top_p": _clamp_float(simulator_top_p, 0.5, 0.0, 1.0),
+        "extractor_temperature": _clamp_float(extractor_temperature, 0.1, 0.0, 1.0),
+        "extractor_top_p": _clamp_float(extractor_top_p, 0.1, 0.0, 1.0),
     }
     with open(RUNTIME_GAME_PATH, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=2)
