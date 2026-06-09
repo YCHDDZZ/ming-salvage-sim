@@ -465,7 +465,8 @@ def build_simulator_payload(
         "victory_status": victory_status(db, state),
         "regions": _auto_table(region_rows),
         "armies": _auto_table(army_rows),
-        # 每军实际持有军械件数 {军名:{武器名:件数}}——AI 据此判「够装备多少人升级」（兵种升级须有对应实物装备）。
+        # 每军每兵种实际持有军械件数 {军名:{兵种名:{武器名:件数}}}——AI 据此判「哪个兵种够装备多少人升级」
+        # （兵种升级须有对应实物装备；拨给火炮队的火炮才能让火炮队升级，拨错兵种不算）。
         "army_held_arms": db.army_held_arms_all(),
         "buildings": _building_prompt_table(db),
         "departments": _auto_table(db.department_payload()),

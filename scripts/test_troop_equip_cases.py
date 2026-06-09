@@ -44,10 +44,10 @@ def run_case(name: str, dispatches: list, cheat: str, army_id: str, content, llm
         session = GameSession(tmp.name, llm_config, content=content, verify_llm=False)
         session.begin_turn()
         state = session.state
-        # 1) 程序拨发军械（确定性）
-        for weapon, qty in dispatches:
-            res = session.db.apply_arms_dispatch(state, army_id, weapon, qty, "测试拨发")
-            print(f"  拨发 {weapon} x{qty} → ok={res.get('ok')} 实拨={res.get('dispatched')}")
+        # 1) 程序拨发军械（确定性）—— 拨给某军某兵种（军→兵种→装备）
+        for troop, weapon, qty in dispatches:
+            res = session.db.apply_arms_dispatch(state, army_id, troop, weapon, qty, "测试拨发")
+            print(f"  拨发 {troop}/{weapon} x{qty} → ok={res.get('ok')} 实拨={res.get('dispatched')}")
         before = _comp(session, army_id)
         print(f"  整编前 composition: {before}")
         print(f"  该军实际持械 held_arms: {_held(session, army_id)}")
@@ -81,16 +81,16 @@ def main():
     # 注意：apply_arms_dispatch 硬卡 min(请拨, 总库)。开局总库火铳1200/三眼铳500/鸟铳300/
     # 虎蹲炮40/佛郎机12。故拨发量取库存内真实值。1200杆枪只够1200人换装——正好验「按件数定人数」。
     cases = [
-        ("B1 够装备→按件数升级（拨1200火铳+500三眼铳=1700件，整编火枪步兵）",
-         [("火铳", 1200), ("三眼铳", 500)],
+        ("B1 够装备→按件数升级（拨1200火铳+500三眼铳=1700件给非正规步兵，整编火枪步兵）",
+         [("非正规步兵", "火铳", 1200), ("非正规步兵", "三眼铳", 500)],
          "关宁军以新拨发的火铳、三眼铳整编一部非正规步兵为火枪步兵（线列步兵），按实际枪数定人数，余部仍为非正规步兵。",
          army),
         ("B2 无装备→拒升（不拨任何枪，硬整编全军为火枪步兵）",
          [],
          "关宁军全军整编为火枪步兵（线列步兵）。",
          army),
-        ("B3 炮兵按门配人（拨40虎蹲炮+12佛郎机=52门，约配2600人）",
-         [("虎蹲炮", 40), ("佛郎机", 12)],
+        ("B3 炮兵按门配人（拨40虎蹲炮+12佛郎机=52门给火炮队，约配2600人）",
+         [("火炮队", "虎蹲炮", 40), ("火炮队", "佛郎机", 12)],
          "关宁军以新拨发的火炮整编一部为火炮队，按火炮门数定炮兵人数（炮约1门配50人）。",
          army),
     ]

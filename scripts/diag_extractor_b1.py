@@ -17,8 +17,8 @@ tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 sess = GameSession(tmp.name, llm, content=content, verify_llm=False)
 sess.begin_turn()
 st = sess.state
-sess.db.apply_arms_dispatch(st, "guanning", "火铳", 1200, "测试")
-sess.db.apply_arms_dispatch(st, "guanning", "三眼铳", 500, "测试")
+sess.db.apply_arms_dispatch(st, "guanning", "非正规步兵", "火铳", 1200, "测试")
+sess.db.apply_arms_dispatch(st, "guanning", "非正规步兵", "三眼铳", 500, "测试")
 
 before = json.loads(sess.db.conn.execute(
     "SELECT troop_composition FROM armies WHERE id='guanning'").fetchone()["troop_composition"])

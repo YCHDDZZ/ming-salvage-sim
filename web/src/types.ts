@@ -50,6 +50,7 @@ export type Army = {
 };
 
 export type ArmyWeapon = {
+  troop_type: string;
   id: string;
   name: string;
   tier: string;

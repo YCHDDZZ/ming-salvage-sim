@@ -486,32 +486,10 @@ export function ArmyDrawer({
     if (!entries.length) return 0;
     return entries.reduce((sum, [name, amount]) => sum + troopMonthlyPay(String(name), Number(amount)), 0);
   };
-  const defaultTroopEquipment = (name: string) => {
-    const equipment: Record<string, string> = {
-      非正规步兵: "武器", 线列步兵: "武器", 火炮队: "武器 + 火炮", 野战炮兵: "武器 + 火炮 + 弹药", 散兵: "武器 + 弹药",
-      堑壕步兵: "武器 + 弹药", 班组步兵: "武器 + 弹药", 机械化步兵: "武器 + 弹药 + 车辆",
-      骑兵: "座骑 + 武器", 龙骑兵: "座骑 + 武器", 骠骑兵: "座骑 + 武器",
-      手枪骑兵: "座骑 + 武器 + 手枪", 装甲骑兵: "车辆 + 武器",
-      桨帆舰队: "舰船", 风帆战舰: "舰船", 铁甲舰: "舰船", 无畏舰: "舰船",
-      侦察机: "飞机（待研究）", 战斗机: "飞机（待研究）", 轰炸机: "飞机（待研究）",
-    };
-    return equipment[name] ?? "武器";
-  };
-  const troopUpgradeText = (name: string) => {
-    const upgrades: Record<string, string> = {
-      非正规步兵: "线列步兵", 线列步兵: "火炮队 / 散兵", 火炮队: "野战炮兵", 野战炮兵: "榴霰炮兵 / 攻城炮兵",
-      散兵: "堑壕步兵", 堑壕步兵: "班组步兵", 班组步兵: "机械化步兵", 机械化步兵: "—",
-      骑兵: "龙骑兵 / 骠骑兵", 龙骑兵: "手枪骑兵", 骠骑兵: "手枪骑兵", 手枪骑兵: "装甲骑兵", 装甲骑兵: "—",
-      桨帆舰队: "风帆战舰", 风帆战舰: "铁甲舰", 铁甲舰: "无畏舰", 无畏舰: "—",
-      侦察机: "战斗机 / 轰炸机", 战斗机: "—", 轰炸机: "—",
-    };
-    return upgrades[name] ?? "—";
-  };
-  // 持械：该军实际持有的军械实物件数（升级须有对应实物装备，按持械量定升级人数）。
-  const armyHeldArmsText = (army: Army) => {
-    return army.arms && army.arms.length > 0
-      ? army.arms.map((w) => `${w.name}×${w.qty}`).join("、")
-      : "暂无入库军械";
+  // 某兵种持有的军械实物件数（军→兵种→装备：升级须有对应实物装备，按持械量定升级人数）。
+  const troopArmsText = (army: Army, troopName: string) => {
+    const held = (army.arms || []).filter((w) => w.troop_type === troopName && w.qty > 0);
+    return held.length > 0 ? held.map((w) => `${w.name}×${w.qty}`).join("、") : "暂无";
   };
   const arrearsTone = (army: Army) => {
     const maint = army.maintenance_per_turn || 1;
@@ -571,13 +549,12 @@ export function ArmyDrawer({
                   <tr><th>操练</th><td>{selected.training}</td><th>机动</th><td>{selected.mobility}</td></tr>
                   <tr><th>忠诚</th><td colSpan={3}>{selected.loyalty}</td></tr>
                   <tr><th>欠饷</th><td colSpan={3}>{selected.arrears > 0 ? `${selected.arrears}万两（≈${(selected.arrears / (selected.maintenance_per_turn || 1)).toFixed(1)}月）` : "无欠饷"}</td></tr>
-                  <tr><th>持械</th><td colSpan={3}>{armyHeldArmsText(selected)}</td></tr>
                   <tr><th>状态</th><td colSpan={3}>{selected.status}</td></tr>
                 </tbody>
               </table>
               <table className="intel-table army-troop-table">
                 <thead>
-                  <tr><th>兵种</th><th>人数</th><th>单价</th><th>月饷</th><th>装备</th><th>升级</th></tr>
+                  <tr><th>兵种</th><th>人数</th><th>单价</th><th>月饷</th><th>装备</th></tr>
                 </thead>
                 <tbody>
                   {(troopEntries(selected).length ? troopEntries(selected) : [[selected.troop_type || "未分兵种", selected.manpower]]).map(([name, amount]) => {
@@ -590,8 +567,7 @@ export function ArmyDrawer({
                         <td>{Number(amount)}</td>
                         <td>{rate.toFixed(2)}万/千人</td>
                         <td>{formatWan(monthlyPay)}万两</td>
-                        <td>{defaultTroopEquipment(troopName)}</td>
-                        <td>{troopUpgradeText(troopName)}</td>
+                        <td>{troopArmsText(selected, troopName)}</td>
                       </tr>
                     );
                   })}

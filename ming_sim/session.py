@@ -747,6 +747,7 @@ class GameSession:
         if not isinstance(data, dict):
             return ("", "")
         army_raw = str(data.get("army") or "").strip()
+        troop_type = str(data.get("troop_type") or "").strip()
         weapon = str(data.get("weapon") or "").strip()
         reason = str(data.get("reason") or "").strip()
         try:
@@ -758,12 +759,13 @@ class GameSession:
         army_id = match_army_id_from_text(army_raw, self.content.armies)
         if army_id is None:
             return (f"拨发未果：未找到军队「{army_raw}」。", "")
-        res = self.db.apply_arms_dispatch(self.state, army_id, weapon, qty, reason=reason)
+        res = self.db.apply_arms_dispatch(self.state, army_id, troop_type, weapon, qty, reason=reason)
         if not res.get("ok"):
             return (f"拨发未果：{res.get('note') or '总库无此械'}。", "")
         gain = res.get("equipment_gain") or 0
         gain_txt = f"，装备+{gain}" if gain else ""
-        return (f"{res['army']}获拨{res['weapon']}{res['dispatched']}（{res.get('note','')}{gain_txt}）", res["army"])
+        troop_txt = f"／{res.get('troop_type')}" if res.get("troop_type") else ""
+        return (f"{res['army']}{troop_txt}获拨{res['weapon']}{res['dispatched']}（{res.get('note','')}{gain_txt}）", res["army"])
 
     def _apply_unlisted_person_registration(self, payload: str) -> Tuple[str, bool]:
         """登记史实未预设/用户确认背景的人物，进入本局正式可召见人物池。"""

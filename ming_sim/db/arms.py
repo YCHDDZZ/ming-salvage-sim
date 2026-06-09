@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
+from ming_sim.content import canon_troop_name
 from ming_sim.models import GameState
 
 
@@ -171,19 +172,32 @@ class _ArmsMixin:
             changes.append({"weapon": w["name"], "delta": delta, "new": new, "reason": reason})
         return changes
 
-    # ── 拨发到军（硬卡：只拨有的）──────────────────────────────────────
-    def apply_arms_dispatch(self, state: GameState, army_id: str, weapon_name_or_id: str,
-                            qty: int, reason: str = "") -> Dict[str, object]:
-        """总库→某军拨发。actual=min(请拨, 总库)；扣总库、增 army_arms、提该军 equipment、写流水。
-        返回 {ok, army, weapon, requested, dispatched, equipment_gain, note}。"""
+    # ── 拨发到军某兵种（硬卡：只拨有的）────────────────────────────────
+    def apply_arms_dispatch(self, state: GameState, army_id: str, troop_type: str,
+                            weapon_name_or_id: str, qty: int, reason: str = "") -> Dict[str, object]:
+        """总库→某军「某兵种」拨发（军→兵种→装备）。actual=min(请拨, 总库)；扣总库、增该兵种
+        army_arms、提该军 equipment、写流水。troop_type 须在该军 troop_composition 里（归一后比对），
+        空则兜底到该军主力兵种（人数最大）。返回 {ok, army, troop_type, weapon, requested, dispatched, ...}。"""
         w = self._ensure_weapon_registered(weapon_name_or_id)
         if w is None:
             return {"ok": False, "note": f"未知型号：{weapon_name_or_id}"}
         wid = str(w["id"])
-        army = self.conn.execute("SELECT id, name, manpower, equipment FROM armies WHERE id=?",
-                                 (army_id,)).fetchone()
+        army = self.conn.execute(
+            "SELECT id, name, manpower, equipment, troop_type, troop_composition FROM armies WHERE id=?",
+            (army_id,)).fetchone()
         if army is None:
             return {"ok": False, "note": f"未入库军队：{army_id}"}
+        # 校验/兜底兵种：须在该军编制内（归一闭集名比对）。
+        composition = self._army_troop_composition(army)
+        if not composition:
+            return {"ok": False, "army": army["name"], "note": f"{army['name']}无编制兵种，无法拨发"}
+        troop = canon_troop_name(str(troop_type or "").strip(), self.content.troop_cost) if troop_type else ""
+        if not troop:
+            # 空兜底到主力兵种（人数最大）
+            troop = max(composition.items(), key=lambda kv: kv[1])[0]
+        elif troop not in composition:
+            return {"ok": False, "army": army["name"], "weapon": w["name"],
+                    "note": f"{army['name']}无「{troop}」兵种（现有：{'、'.join(composition.keys())}）"}
         try:
             req = max(0, int(qty))
         except (TypeError, ValueError):
@@ -200,17 +214,19 @@ class _ArmsMixin:
         self.conn.execute("UPDATE arms_stock SET qty=?, updated_at=CURRENT_TIMESTAMP WHERE weapon_id=?",
                           (new_stock, wid))
         self._log_arms(state, wid, None, stock, new_stock, rsn, "dispatch")
-        # 2) 增 army_arms
+        # 2) 增该军「该兵种」的 army_arms（军→兵种→装备三级）
         held_row = self.conn.execute(
-            "SELECT qty FROM army_arms WHERE army_id=? AND weapon_id=?", (army_id, wid)).fetchone()
+            "SELECT qty FROM army_arms WHERE army_id=? AND troop_type=? AND weapon_id=?",
+            (army_id, troop, wid)).fetchone()
         held_old = int(held_row["qty"]) if held_row else 0
         held_new = held_old + actual
         self.conn.execute(
             """
-            INSERT INTO army_arms (army_id, weapon_id, qty) VALUES (?, ?, ?)
-            ON CONFLICT(army_id, weapon_id) DO UPDATE SET qty=excluded.qty, updated_at=CURRENT_TIMESTAMP
+            INSERT INTO army_arms (army_id, troop_type, weapon_id, qty) VALUES (?, ?, ?, ?)
+            ON CONFLICT(army_id, troop_type, weapon_id)
+              DO UPDATE SET qty=excluded.qty, updated_at=CURRENT_TIMESTAMP
             """,
-            (army_id, wid, held_new),
+            (army_id, troop, wid, held_new),
         )
         self._log_arms(state, wid, army_id, held_old, held_new, rsn, "dispatch")
         # 3) 提该军 equipment：拨发量×equip_per_unit，按军规模折算（每万兵的装备增益），钳 0-100
@@ -223,7 +239,7 @@ class _ArmsMixin:
                 "UPDATE armies SET equipment=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (eq_new, army_id))
         self.conn.commit()
         return {
-            "ok": True, "army": army["name"], "weapon": w["name"],
+            "ok": True, "army": army["name"], "troop_type": troop, "weapon": w["name"],
             "requested": req, "dispatched": actual, "equipment_gain": eq_new - eq_old,
             "note": (f"实拨{actual}（请{req}，库存仅{stock}，照发）" if actual < req
                      else f"拨发{actual}"),
@@ -250,33 +266,37 @@ class _ArmsMixin:
         return out
 
     def army_arms_payload(self, army_id: str) -> List[Dict[str, object]]:
-        """某军持有武器明细。供军队抽屉展示。"""
+        """某军持有武器明细（带 troop_type，军→兵种→装备三级）。供军队抽屉按兵种分组展示。"""
         rows = self.conn.execute(
             """
-            SELECT aa.weapon_id, w.name, w.tier, aa.qty
+            SELECT aa.troop_type, aa.weapon_id, w.name, w.tier, aa.qty
             FROM army_arms aa JOIN weapons w ON w.id = aa.weapon_id
             WHERE aa.army_id = ? AND aa.qty > 0
-            ORDER BY w.tier, w.name
+            ORDER BY aa.troop_type, w.tier, w.name
             """,
             (army_id,),
         ).fetchall()
-        return [{"id": r["weapon_id"], "name": r["name"], "tier": r["tier"], "qty": int(r["qty"])}
+        return [{"troop_type": str(r["troop_type"] or ""), "id": r["weapon_id"],
+                 "name": r["name"], "tier": r["tier"], "qty": int(r["qty"])}
                 for r in rows]
 
-    def army_held_arms_all(self) -> Dict[str, Dict[str, int]]:
-        """所有在役军队的持械量 {军名: {武器名: 件数}}。供 simulator/extractor payload——
-        AI 据此判「该军有多少枪炮、够装备多少人升级」。只列 qty>0 的型号；无持械的军不出现。"""
+    def army_held_arms_all(self) -> Dict[str, Dict[str, Dict[str, int]]]:
+        """所有在役军队每兵种的持械量 {军名: {兵种名: {武器名: 件数}}}（军→兵种→装备三级）。
+        供 simulator/extractor payload——AI 据此判「哪个兵种有多少枪炮、够装备多少人升级」。
+        只列 qty>0 的型号；无持械的军/兵种不出现。"""
         rows = self.conn.execute(
             """
-            SELECT a.name AS army_name, w.name AS weapon_name, aa.qty
+            SELECT a.name AS army_name, aa.troop_type, w.name AS weapon_name, aa.qty
             FROM army_arms aa
             JOIN armies a ON a.id = aa.army_id
             JOIN weapons w ON w.id = aa.weapon_id
             WHERE aa.qty > 0 AND a.active = 1
-            ORDER BY a.id, w.tier, w.name
+            ORDER BY a.id, aa.troop_type, w.tier, w.name
             """
         ).fetchall()
-        out: Dict[str, Dict[str, int]] = {}
+        out: Dict[str, Dict[str, Dict[str, int]]] = {}
         for r in rows:
-            out.setdefault(str(r["army_name"]), {})[str(r["weapon_name"])] = int(r["qty"])
+            troop = str(r["troop_type"] or "（未分兵种）")
+            army_bucket = out.setdefault(str(r["army_name"]), {})
+            army_bucket.setdefault(troop, {})[str(r["weapon_name"])] = int(r["qty"])
         return out

@@ -293,11 +293,14 @@ def build_minister_tools(character: Character, context: CourtContext,
         )
         return f"__pending_appointment__{payload}"
 
-    def dispatch_arms(army: str, weapon: str, qty: int, reason: str = "") -> str:
-        """从国家军备总库拨发军械给某军（兵部/工部专属）。army＝受拨军号、weapon＝武器型号
-        （如「红夷大炮」「火铳」「燧发枪」）、qty＝拨发件数。拨发后该军装备提升。
+    def dispatch_arms(army: str, troop_type: str, weapon: str, qty: int, reason: str = "") -> str:
+        """从国家军备总库拨发军械给某军的某兵种（兵部/工部专属）。army＝受拨军号、
+        troop_type＝受拨兵种（如「火炮队」「非正规步兵」「手枪骑兵」，须是该军编制内兵种；
+        留空则拨给该军主力兵种）、weapon＝武器型号（如「红夷大炮」「火铳」「燧发枪」）、qty＝拨发件数。
+        装备入该兵种的军械库（军→兵种→装备），凑够实物该兵种方可升级。
         注意：只能拨总库现有之械，库存不足按现存量照发；皇帝准奏后落地。"""
         a = (army or "").strip()
+        t = (troop_type or "").strip()
         w = (weapon or "").strip()
         if not a or not w:
             return "拨发失败：受拨军号或武器型号为空。"
@@ -309,7 +312,7 @@ def build_minister_tools(character: Character, context: CourtContext,
             return "拨发失败：拨发件数须为正。"
         import json as _json
         payload = _json.dumps(
-            {"army": a, "weapon": w, "qty": n, "reason": (reason or "").strip()},
+            {"army": a, "troop_type": t, "weapon": w, "qty": n, "reason": (reason or "").strip()},
             ensure_ascii=False,
         )
         return f"__pending_arms_dispatch__{payload}"

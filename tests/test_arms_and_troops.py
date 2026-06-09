@@ -48,15 +48,30 @@ class ArmsAndTroopsTests(unittest.TestCase):
         self.assertEqual(army["manpower"], sum(army["troop_composition"].values()))
         self.assertEqual(army["maintenance_per_turn"], self.content.troop_maintenance_total(army["troop_composition"]))
 
-    def test_army_held_arms_feeds_payload(self):
-        # 拨发军械后，每军持械量进 army_held_arms（AI 据此判升级规模）；未拨发的军不出现。
+    def test_army_held_arms_three_tier(self):
+        # 军→兵种→装备：拨给某军某兵种，army_held_arms 返回 {军:{兵种:{武器:件数}}}。
         self.assertEqual(self.db.army_held_arms_all(), {})  # 开局各军无入库持械
-        self.db.apply_arms_dispatch(self.state, "jingying", "火铳", 1200, "测试拨发")
+        res = self.db.apply_arms_dispatch(self.state, "jingying", "火炮队", "虎蹲炮", 40, "测试")
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["troop_type"], "火炮队")
+        self.db.apply_arms_dispatch(self.state, "jingying", "非正规步兵", "火铳", 1200, "测试")
         held = self.db.army_held_arms_all()
-        self.assertIn("京营", held)
-        self.assertEqual(held["京营"]["火铳"], 1200)
-        # 其余军未拨发 → 不在表里
-        self.assertNotIn("关宁军 / 宁锦防线", held)
+        self.assertEqual(held["京营"]["火炮队"]["虎蹲炮"], 40)
+        self.assertEqual(held["京营"]["非正规步兵"]["火铳"], 1200)
+        # 装备按兵种分开，不混在一起
+        self.assertNotIn("火铳", held["京营"]["火炮队"])
+
+    def test_dispatch_rejects_absent_troop(self):
+        # 拨给该军没有的兵种 → 拒绝，note 含「无该兵种」。
+        res = self.db.apply_arms_dispatch(self.state, "jingying", "侦察机", "火铳", 100, "测试")
+        self.assertFalse(res["ok"])
+        self.assertIn("侦察机", res["note"])
+
+    def test_dispatch_empty_troop_falls_back_to_main(self):
+        # 空兵种 → 兜底到主力兵种（人数最大，jingying 的非正规步兵 75000）。
+        res = self.db.apply_arms_dispatch(self.state, "jingying", "", "火铳", 500, "测试")
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["troop_type"], "非正规步兵")
 
 
 class TroopRateAndCanonTests(unittest.TestCase):

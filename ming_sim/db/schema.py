@@ -313,12 +313,15 @@ class _SchemaMixin:
             );
 
             -- 拨发到军：某军持有某型号几件
+            -- 拨发到军：某军「某兵种」持有某型号几件（军→兵种→装备三级）。
+            -- troop_type＝兵种名（armies.troop_composition 的 key，归一闭集名）。
             CREATE TABLE IF NOT EXISTS army_arms (
                 army_id TEXT NOT NULL,
+                troop_type TEXT NOT NULL DEFAULT '',
                 weapon_id TEXT NOT NULL,
                 qty INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY(army_id, weapon_id),
+                PRIMARY KEY(army_id, troop_type, weapon_id),
                 FOREIGN KEY(army_id) REFERENCES armies(id),
                 FOREIGN KEY(weapon_id) REFERENCES weapons(id)
             );
