@@ -45,6 +45,23 @@ export type Army = {
   loyalty: number;
   status: string;
   owner_power?: string;
+  arms?: ArmyWeapon[];
+};
+
+export type ArmyWeapon = {
+  id: string;
+  name: string;
+  tier: string;
+  qty: number;
+};
+
+export type ArmsStockItem = {
+  id: string;
+  name: string;
+  tier: string;
+  qty: number;
+  unlocked: boolean;
+  requires_tech: string;
 };
 
 export type Power = {
@@ -184,6 +201,8 @@ export type Minister = {
   favorite: boolean;
   portrait_id?: string;  // 空/undefined=无专属，前端 fallback 到池
   power_id?: string;     // 大明=ming, 后金=houjin, 流寇=bandits 等
+  origin?: string;       // preset/runtime
+  archived?: boolean;
   skills: Array<{ id: string; name: string; kind?: string; sources: string[]; description: string }>;
 };
 
@@ -348,11 +367,13 @@ export type GameState = {
   events: EventItem[];
   regions: Region[];
   armies: Army[];
+  arms_stock?: ArmsStockItem[];
   departments: Department[];
   technologies: Technology[];
   preset_trees?: PresetTrees;
   map_nodes: MapNode[];
   ministers: Minister[];
+  archived_ministers?: Minister[];
   consorts: Minister[];
   directives: Directive[];
   pending_count: number;
@@ -497,6 +518,7 @@ export type MenuStatus = {
     issue_log_limit?: number;
     secret_order_person_limit?: number;
     secret_order_total_limit?: number;
+    character_limit?: number;
     minister_temperature?: number;
     minister_top_p?: number;
     simulator_temperature?: number;

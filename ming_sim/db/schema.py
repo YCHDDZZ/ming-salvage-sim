@@ -82,7 +82,9 @@ class _SchemaMixin:
                 status_reason TEXT NOT NULL DEFAULT '',
                 status_changed_turn INTEGER NOT NULL DEFAULT 0,
                 power_id TEXT NOT NULL DEFAULT 'ming',
-                location TEXT NOT NULL DEFAULT ''
+                location TEXT NOT NULL DEFAULT '',
+                origin TEXT NOT NULL DEFAULT 'preset',
+                archived INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS character_offices (
@@ -275,6 +277,54 @@ class _SchemaMixin:
                 origin TEXT NOT NULL DEFAULT 'issue',
                 created_turn INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- 军事装备型号注册表（weapons.json 打底 + 运行时 LLM 新增）
+            CREATE TABLE IF NOT EXISTS weapons (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                tier TEXT NOT NULL DEFAULT '',
+                power INTEGER NOT NULL DEFAULT 1,
+                cost INTEGER NOT NULL DEFAULT 1,
+                equip_per_unit REAL NOT NULL DEFAULT 0.4,
+                requires_tech TEXT NOT NULL DEFAULT '',
+                registered TEXT NOT NULL DEFAULT 'seed',
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- 国家军备总库：一行一型号
+            CREATE TABLE IF NOT EXISTS arms_stock (
+                weapon_id TEXT PRIMARY KEY,
+                qty INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(weapon_id) REFERENCES weapons(id)
+            );
+
+            -- 拨发到军：某军持有某型号几件
+            CREATE TABLE IF NOT EXISTS army_arms (
+                army_id TEXT NOT NULL,
+                weapon_id TEXT NOT NULL,
+                qty INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY(army_id, weapon_id),
+                FOREIGN KEY(army_id) REFERENCES armies(id),
+                FOREIGN KEY(weapon_id) REFERENCES weapons(id)
+            );
+
+            -- 军备变更流水（产出/拨发/战损溯源，army_id 为 NULL=总库变更）
+            CREATE TABLE IF NOT EXISTS arms_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                turn INTEGER NOT NULL,
+                year INTEGER NOT NULL,
+                period INTEGER NOT NULL,
+                weapon_id TEXT NOT NULL,
+                army_id TEXT,
+                old_value INTEGER NOT NULL,
+                new_value INTEGER NOT NULL,
+                delta INTEGER NOT NULL,
+                reason TEXT NOT NULL DEFAULT '',
+                source TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS economy_accounts (
@@ -617,6 +667,25 @@ class _SchemaMixin:
         self.ensure_column("regions", "controlled_by", "TEXT NOT NULL DEFAULT 'ming'")
         self.ensure_column("characters", "power_id", "TEXT NOT NULL DEFAULT 'ming'")
         self.ensure_column("characters", "location", "TEXT NOT NULL DEFAULT ''")
+        self.ensure_column("characters", "origin", "TEXT NOT NULL DEFAULT 'preset'")
+        self.ensure_column("characters", "archived", "INTEGER NOT NULL DEFAULT 0")
+        self.conn.execute(
+            """
+            UPDATE characters
+            SET origin='runtime'
+            WHERE origin='preset'
+              AND name IN (
+                SELECT character_name FROM character_offices
+                WHERE source IN (
+                    '吏部任命', '吏部铨选任命', '诏书纳妃', '史实人物补档',
+                    '皇帝确认背景补档', '名册外人物补档', '礼部选秀'
+                )
+                OR source LIKE '%补档%'
+                OR source LIKE '%任命%'
+                OR source LIKE '%纳妃%'
+              )
+            """
+        )
         self.ensure_column("issues", "resolve_condition", "TEXT NOT NULL DEFAULT ''")
         self.ensure_column("issues", "fail_condition", "TEXT NOT NULL DEFAULT ''")
         # 玩家手动管理的 decree 局势：is_manual=1 标记由皇帝直接立项（非 LLM/事件池）；
@@ -737,6 +806,7 @@ class _SchemaMixin:
         """)
         self._drop_regions_grain_security_column()
         self._migrate_region_grain_fiscal_fields()
+        self._migrate_region_liao_xiang_li()
         # 军队软删除标记：撤销（manpower 归 0）的番号置 active=0，盘面/payload/前端读取层过滤掉，
         # 行仍留库可被「收复/重建」事件复活。旧档默认 active=1（满编军不受影响）。
         self.ensure_column("armies", "active", "INTEGER NOT NULL DEFAULT 1")
@@ -766,6 +836,38 @@ class _SchemaMixin:
                 if key in fiscal:
                     continue
                 fiscal[key] = int(defaults.get(key, 0) or 0)
+                changed = True
+            if changed:
+                self.conn.execute(
+                    "UPDATE regions SET fiscal = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (json.dumps(fiscal, ensure_ascii=False), region_id),
+                )
+
+    def _migrate_region_liao_xiang_li(self) -> None:
+        """旧存档迁移：liao_xiang 月额 → liao_xiang_li 亩率。"""
+        content_defaults = {
+            region_id: int((region.fiscal or {}).get("liao_xiang_li") or 0)
+            for region_id, region in self.content.regions.items()
+        }
+        for row in self.conn.execute("SELECT id, fiscal FROM regions").fetchall():
+            region_id = str(row["id"])
+            try:
+                fiscal = json.loads(str(row["fiscal"] or "{}"))
+            except Exception:
+                fiscal = {}
+            if not isinstance(fiscal, dict):
+                fiscal = {}
+            changed = False
+            if "liao_xiang_li" not in fiscal:
+                old_monthly = int(fiscal.get("liao_xiang") or 0)
+                guan_min_tian = int(fiscal.get("guan_min_tian") or 0)
+                if old_monthly > 0 and guan_min_tian > 0:
+                    fiscal["liao_xiang_li"] = round(old_monthly * 10000 * 12 / guan_min_tian)
+                else:
+                    fiscal["liao_xiang_li"] = int(content_defaults.get(region_id, 0) or 0)
+                changed = True
+            if "liao_xiang" in fiscal:
+                fiscal.pop("liao_xiang", None)
                 changed = True
             if changed:
                 self.conn.execute(

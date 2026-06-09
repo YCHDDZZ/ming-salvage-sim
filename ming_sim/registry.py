@@ -247,6 +247,32 @@ def build_secret_order_brief(character: Character, context: CourtContext) -> str
     return "\n".join(lines)
 
 
+def build_arms_stock_brief(character: Character, context: CourtContext) -> str:
+    """军备总库现存提醒——只给有 dispatch_arms 授权的衙门（兵部/工部），让其知道库里有械可拨，
+    会想到调 `dispatch_arms` 把军械发到前线军。无此授权的官署不注入（省 token、不越权）。"""
+    try:
+        grant = context.db.get_office_court_grant(character.office_type)
+    except Exception:
+        return ""
+    if "dispatch_arms" not in (grant.get("court_tools") or []):
+        return ""
+    try:
+        stock = context.db.arms_stock_payload()
+    except Exception:
+        return ""
+    have = [s for s in stock if int(s.get("qty") or 0) > 0]
+    lines = [
+        "【军备总库（你可拨发）】",
+        "★ 把库存军械发给某军调 `dispatch_arms(army=受拨军号, weapon=武器型号, qty=件数, reason=缘由)`："
+        "即时扣总库、增该军持械、提其装备。只能拨库里现有之械，库存不足按现存量照发。",
+    ]
+    if have:
+        lines.append("现存：" + "、".join(f"{s['name']}{s['qty']}" for s in have) + "。")
+    else:
+        lines.append("现存：总库暂空（待军械局月产或诏令赶制、外购入库后方可拨发）。")
+    return "\n".join(lines)
+
+
 def _make_cultivate_tool(character: Character, context: CourtContext):
     """生成后宫调教 tool，绑定到当前妃嫔。"""
     name = character.name
@@ -365,7 +391,10 @@ def _make_select_consort_tool(context: CourtContext):
                 summary=str(item.get("summary") or "").strip(),
                 portrait_id=f"consort_pool_{pid}",  # 显式指定，add_character 不再自动分配
             )
-            context.db.add_character(context.state, consort)
+            try:
+                context.db.add_character(context.state, consort)
+            except ValueError as exc:
+                return f"（未能立为候选：{exc}）"
             content.characters[name] = consort
             existing_names.add(name)
             used.add(pid)
@@ -442,17 +471,14 @@ def create_minister_agent(
             and getattr(ch, "power_id", "ming") == "ming"
             and context.db.get_character_status(ch.name)[0] != "offstage"
         )
-        army_count = context.db.conn.execute("SELECT COUNT(*) FROM armies WHERE active = 1").fetchone()[0]
         use_roster_tool = active_char_count > 100
-        use_army_tool = army_count > 30
+        use_army_tool = True
         if use_roster_tool:
             court_roster = build_court_roster_index(context)
         else:
             court_roster = build_court_roster(context)
-        if use_army_tool:
-            army_roster = context.db.army_roster(index_only=True)
-        else:
-            army_roster = context.db.army_roster()
+        army_roster = context.db.army_roster(index_only=True)
+        arms_brief = build_arms_stock_brief(character, context)
         last_gazette = build_last_gazette_brief(context)
         memory_brief = build_memory_brief(character, context)
         recap_brief = build_minister_recap_brief(character, context)
@@ -466,6 +492,8 @@ def create_minister_agent(
             monthly_block_parts.append(court_roster)
         if army_roster:
             monthly_block_parts.append(army_roster)
+        if arms_brief:
+            monthly_block_parts.append(arms_brief)
         if last_gazette:
             monthly_block_parts.append(last_gazette)
         if memory_brief:

@@ -796,10 +796,12 @@ class WebGame:
         office = character.office  # 去职者已被清空，可能为空串
         # summary 不含官职（卡片/详情已单独显 office），避免重复
         summary = f"{character.faction}一系，行事{character.style}。"
-        power_row = self.db.conn.execute(
-            "SELECT power_id FROM characters WHERE name=?", (character.name,)
+        meta_row = self.db.conn.execute(
+            "SELECT power_id, origin, archived FROM characters WHERE name=?", (character.name,)
         ).fetchone()
-        power_id = (power_row["power_id"] if power_row else None) or getattr(character, "power_id", "ming") or "ming"
+        power_id = (meta_row["power_id"] if meta_row else None) or getattr(character, "power_id", "ming") or "ming"
+        origin = (meta_row["origin"] if meta_row else None) or "preset"
+        archived = bool(int((meta_row["archived"] if meta_row else 0) or 0))
         return {
             "name": character.name,
             "office": office,
@@ -830,6 +832,8 @@ class WebGame:
             "description": character.summary,
             "portrait_id": character.portrait_id,
             "power_id": power_id,
+            "origin": origin,
+            "archived": archived,
             "skills": self._runtime_skill_payloads(character),
             "favorite": character.name in self.favorites,
         }
@@ -855,6 +859,64 @@ class WebGame:
             "notes": row["notes"],
             "authority": row["notes"] or "",
         }
+
+    def _character_from_db_row(self, row) -> Character:
+        try:
+            aliases = json.loads(row["aliases"] or "[]")
+        except (TypeError, json.JSONDecodeError):
+            aliases = []
+        try:
+            personal_skills = json.loads(row["personal_skills"] or "[]")
+        except (TypeError, json.JSONDecodeError):
+            personal_skills = []
+        if not isinstance(aliases, list):
+            aliases = []
+        if not isinstance(personal_skills, list):
+            personal_skills = []
+        return Character(
+            name=str(row["name"]),
+            office=str(row["office"] or ""),
+            office_type=str(row["office_type"] or ""),
+            faction=str(row["faction"] or "中立"),
+            aliases=[str(item) for item in aliases if str(item).strip()],
+            personal_skills=[str(item) for item in personal_skills if str(item).strip()],
+            loyalty=int(row["loyalty"] or 50),
+            ability=int(row["ability"] or 50),
+            integrity=int(row["integrity"] or 50),
+            courage=int(row["courage"] or 50),
+            style=str(row["style"] or ""),
+            power_id=str(row["power_id"] or "ming"),
+            diplomacy=int(row["diplomacy"] or 50),
+            martial=int(row["martial"] or 50),
+            stewardship=int(row["stewardship"] or 50),
+            intrigue=int(row["intrigue"] or 50),
+            learning=int(row["learning"] or 50),
+            location=str(row["location"] or ""),
+            birth_year=int(row["birth_year"] or 0),
+            historical_death_year=int(row["historical_death_year"] or 0),
+            historical_death_month=int(row["historical_death_month"] or 0),
+            debut_year=int(row["debut_year"] or 0),
+            debut_month=int(row["debut_month"] or 0),
+            status=str(row["status"] or "active"),
+            summary=str(row["summary"] or ""),
+            portrait_id=str(row["portrait_id"] or ""),
+        )
+
+    def archived_character_payloads(self) -> List[Dict[str, Any]]:
+        rows = self.db.conn.execute(
+            """
+            SELECT name, office, office_type, faction, aliases, personal_skills,
+                   loyalty, ability, integrity, courage, style,
+                   diplomacy, martial, stewardship, intrigue, learning,
+                   birth_year, historical_death_year, historical_death_month,
+                   debut_year, debut_month, status, portrait_id, power_id, location,
+                   summary
+            FROM characters
+            WHERE archived=1
+            ORDER BY name
+            """
+        ).fetchall()
+        return [self.public_character(self._character_from_db_row(row)) for row in rows]
 
     def directive_rows(self):
         # 颁诏候选 = draft；UI 列表含 pending
@@ -1152,6 +1214,13 @@ class WebGame:
             "timeline": row.get("timeline", []),
         }
 
+    def _armies_with_arms(self) -> list:
+        """军队盘面 + 各军持有武器明细（army_arms），供军队抽屉展示。"""
+        armies = self.db.army_payload()
+        for a in armies:
+            a["arms"] = self.db.army_arms_payload(str(a["id"]))
+        return armies
+
     def state_payload(self) -> Dict[str, Any]:
         directives = [self.directive_payload(row) for row in self.directive_rows()]
         regions = self.regions_payload()
@@ -1175,7 +1244,8 @@ class WebGame:
             "ending": self.ending_payload(),
             "events": [],
             "regions": regions,
-            "armies": self.db.army_payload(),
+            "armies": self._armies_with_arms(),
+            "arms_stock": self.db.arms_stock_payload(),
             "departments": self.db.department_payload(),
             "technologies": self.db.technology_payload(),
             "preset_trees": _preset_tree_payload(self),
@@ -1184,6 +1254,10 @@ class WebGame:
                 self.public_character(c)
                 for c in self.content.characters.values()
                 if c.office_type != "后宫" and self.character_power_id(c) == "ming"
+            ],
+            "archived_ministers": [
+                c for c in self.archived_character_payloads()
+                if c.get("office_type") != "后宫" and (c.get("power_id") or "ming") == "ming"
             ],
             "consorts": [
                 self.public_character(c)
@@ -2383,6 +2457,8 @@ class GameSettingsRequest(BaseModel):
     secret_order_person_limit: int = 1
     # 全朝同时进行中的密令总上限；默认 5。
     secret_order_total_limit: int = 5
+    # 本局朝臣人物建档上限；后宫不计入。默认 120，调高会增加名册/推演 token 消耗。
+    character_limit: int = 120
     # 大臣 / 推演 / 结算三个核心 agent 的采样参数。
     minister_temperature: float = 0.6
     minister_top_p: float = 0.9
@@ -2409,6 +2485,7 @@ async def api_menu_save_game_settings(request: GameSettingsRequest) -> Dict[str,
         request.issue_log_limit,
         request.secret_order_person_limit,
         request.secret_order_total_limit,
+        request.character_limit,
         request.minister_temperature,
         request.minister_top_p,
         request.simulator_temperature,
@@ -2812,6 +2889,9 @@ async def api_buildings(region_id: str = "") -> Dict[str, Any]:
 async def api_add_favorite(minister_name: str) -> Dict[str, Any]:
     if minister_name not in get_game().content.characters:
         raise HTTPException(status_code=404, detail=f"未找到：{minister_name}")
+    row = get_game().db.conn.execute("SELECT archived FROM characters WHERE name=?", (minister_name,)).fetchone()
+    if row is not None and int(row["archived"] or 0):
+        raise HTTPException(status_code=409, detail=f"{minister_name}已归档，请先恢复。")
     get_game().favorites.add(minister_name)
     get_game().db.kv_set("favorites", json.dumps(sorted(get_game().favorites)))
     return {"favorites": sorted(get_game().favorites)}
@@ -2824,21 +2904,76 @@ async def api_remove_favorite(minister_name: str) -> Dict[str, Any]:
     return {"favorites": sorted(get_game().favorites)}
 
 
+@app.post("/api/ministers/{minister_name}/archive")
+async def api_archive_minister(minister_name: str) -> Dict[str, Any]:
+    game = get_game()
+    try:
+        result = game.db.archive_runtime_character(game.session.state, minister_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    game.content.characters.pop(minister_name, None)
+    game.session.temporary_characters.pop(minister_name, None)
+    game.chat_history.pop(minister_name, None)
+    game.favorites.discard(minister_name)
+    game.db.kv_set("favorites", json.dumps(sorted(game.favorites)))
+    if getattr(game.session, "registry", None) is not None:
+        game.session.registry.agents.pop(minister_name, None)
+        game.session.registry.session_ids.pop(minister_name, None)
+    return {"ok": True, **result}
+
+
+@app.post("/api/ministers/{minister_name}/restore")
+async def api_restore_minister(minister_name: str) -> Dict[str, Any]:
+    game = get_game()
+    try:
+        result = game.db.restore_archived_character(minister_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    row = game.db.conn.execute(
+        """
+        SELECT name, office, office_type, faction, aliases, personal_skills,
+               loyalty, ability, integrity, courage, style,
+               diplomacy, martial, stewardship, intrigue, learning,
+               birth_year, historical_death_year, historical_death_month,
+               debut_year, debut_month, status, portrait_id, power_id, location,
+               summary
+        FROM characters
+        WHERE name=? AND archived=0
+        """,
+        (minister_name,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"未找到已恢复人物：{minister_name}")
+    character = game._character_from_db_row(row)
+    game.content.characters[character.name] = character
+    game.chat_history.setdefault(character.name, [])
+    if getattr(game.session, "registry", None) is not None:
+        game.session.registry.session_ids.setdefault(
+            character.name,
+            f"minister-{character.name}-turn-{game.session.state.turn}",
+        )
+        game.session.registry.agents.pop(character.name, None)
+    return {"ok": True, "minister": game.public_character(character), **result}
+
+
 _STATUS_LABEL_WEB = {
     "active": "在朝", "offstage": "尚未登场", "dead": "已殁", "dismissed": "已罢黜",
     "imprisoned": "下狱", "exiled": "流放", "retired": "致仕",
 }
 
 
-def _require_active_minister(minister_name: str) -> None:
+def _require_chat_capable_minister(minister_name: str) -> None:
     if minister_name in get_game().session.temporary_characters:
         return
     if minister_name not in get_game().content.characters:
         raise HTTPException(status_code=404, detail=f"未找到人物：{minister_name}")
+    archived_row = get_game().db.conn.execute("SELECT archived FROM characters WHERE name=?", (minister_name,)).fetchone()
+    if archived_row is not None and int(archived_row["archived"] or 0):
+        raise HTTPException(status_code=409, detail=f"{minister_name}已归档，请先恢复。")
     if get_game().character_power_id(get_game().content.characters[minister_name]) != "ming":
         raise HTTPException(status_code=409, detail=f"{minister_name}不属大明朝廷，无法召见。")
     status, reason = get_game().db.get_character_status(minister_name)
-    if status != "active":
+    if status in {"dead", "offstage"}:
         label = _STATUS_LABEL_WEB.get(status, status)
         detail = f"{minister_name}已{label}，无法召见。" + (reason or "")
         raise HTTPException(status_code=409, detail=detail.strip())
@@ -2846,12 +2981,16 @@ def _require_active_minister(minister_name: str) -> None:
 
 @app.get("/api/ministers/{minister_name}/chat")
 async def api_chat_history(minister_name: str) -> Dict[str, Any]:
-    _require_active_minister(minister_name)
+    if minister_name not in get_game().content.characters and minister_name not in get_game().session.temporary_characters:
+        raise HTTPException(status_code=404, detail=f"未找到人物：{minister_name}")
+    archived_row = get_game().db.conn.execute("SELECT archived FROM characters WHERE name=?", (minister_name,)).fetchone()
+    if archived_row is not None and int(archived_row["archived"] or 0):
+        raise HTTPException(status_code=409, detail=f"{minister_name}已归档，请先恢复。")
     character = get_game().session._character(minister_name)
     return {
         "minister": get_game().public_character(character),
         "history": get_game().chat_history.get(minister_name, []),
-        "suggestions": get_game().suggestions_for(character),
+        "suggestions": get_game().suggestions_for(character) if character.status == "active" else [],
     }
 
 
@@ -2871,22 +3010,26 @@ async def api_create_secret_order(minister_name: str, request: SecretOrderReques
     if not title or not content:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="title 和 content 不能为空")
-    order_id = game.db.create_secret_order(
-        game.session.state, minister_name, title, content, request.tags, deadline_months=request.deadline_months
-    )
+    try:
+        order_id = game.db.create_secret_order(
+            game.session.state, minister_name, title, content, request.tags, deadline_months=request.deadline_months
+        )
+    except ValueError as exc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=409, detail=str(exc)) from None
     print(f"[secret_order/api] 直接落库 minister={minister_name} title={title!r} id={order_id}")
     return {"order_id": order_id, "minister_name": minister_name, "title": title, "status": "active"}
 
 
 @app.post("/api/ministers/{minister_name}/chat")
 async def api_chat(minister_name: str, request: ChatRequest) -> Dict[str, Any]:
-    _require_active_minister(minister_name)
+    _require_chat_capable_minister(minister_name)
     return get_game().chat(minister_name, request.message)
 
 
 @app.post("/api/ministers/{minister_name}/chat/stream")
 async def api_chat_stream(minister_name: str, request: ChatRequest) -> StreamingResponse:
-    _require_active_minister(minister_name)
+    _require_chat_capable_minister(minister_name)
     async def generate() -> AsyncIterator[str]:
         for item in get_game().chat_stream(minister_name, request.message):
             item_type = str(item.get("type", "message"))

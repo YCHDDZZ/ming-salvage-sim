@@ -133,23 +133,33 @@ class _ArmiesMixin:
         )
 
     def army_roster(self, filter_names: Optional[List[str]] = None, index_only: bool = False) -> str:
-        """全军名册。filter_names 非空则只返回指定军队；index_only=True 只返回军名+欠饷+状态索引。"""
+        """全军名册。filter_names 非空则只返回指定军队；index_only=True 只返回 id+军名索引。"""
         rows = self.conn.execute(
             "SELECT * FROM armies WHERE active = 1 ORDER BY owner_power='ming' DESC, theater, name"
         ).fetchall()
         if filter_names:
             rows = [r for r in rows if r["name"] in filter_names or r["id"] in filter_names]
         if index_only:
-            # 军队超 30 时用索引：仅显示军名+欠饷+状态，完整信息由 query_army_roster tool 提供
-            lines = []
+            # 大臣 system 只给可查询对象名，完整欠饷/补给/士气等现值由 query_army_roster 按需查。
+            own: List[str] = []
+            other: List[str] = []
             for row in rows:
                 if str(row["owner_power"]) == "ming":
-                    arr = int(row["arrears"]) or 0
-                    lines.append(f"{row['name']}：欠饷{arr}万两，{row['status']}")
-            return (
-                "【全军名册索引（涉及军队欠饷/补给/士气时先调 query_army_roster 查完整信息）】\n"
-                + "\n".join(lines)
-            ) if lines else ""
+                    own.append(f"{row['id']}|{row['name']}")
+                else:
+                    other.append(f"{row['id']}|{row['name']}")
+            if not own and not other:
+                return ""
+            out = [
+                "【全军名册索引（仅列可查询军名；谈某军欠饷/补给/士气/状态前先调 query_army_roster 查完整信息）】",
+            ]
+            if own:
+                out.append("大明各军（列序＝id|军名）：")
+                out.extend(own)
+            if other:
+                out.append("敌对/外藩军（可见情报，列序＝id|军名）：")
+                out.extend(other)
+            return "\n".join(out)
         if not rows:
             return ""
         own: List[str] = []
@@ -233,6 +243,22 @@ class _ArmiesMixin:
                 continue
             reason = str(raw_changes.get("reason") or raw_changes.get("原因") or event.title).strip()[:80]
             _valid_army_fields = set(ARMY_SCORE_FIELDS + ARMY_QUANTITY_FIELDS + ARMY_TEXT_FIELDS)
+            # 规范化键，便于「兵力变了但军费没给」时同比例补一笔军费增量。
+            norm_changes: Dict[str, object] = {
+                ARMY_FIELD_ALIASES.get(str(k).strip(), str(k).strip()): v for k, v in raw_changes.items()
+            }
+            # 扩编/裁撤只给了 manpower 增量、漏了 maintenance_per_turn → 按兵种单价补军费增量
+            # （单价×兵力增量，单价＝troop_cost.json 按 troop_type 匹配的兵种档）。
+            # 否则兵力涨/缩了军费原地不动（提示词要求两者同给，这里兜底防 LLM 漏写）。
+            if "manpower" in norm_changes and "maintenance_per_turn" not in norm_changes:
+                try:
+                    mp_delta = int(norm_changes["manpower"])
+                except (TypeError, ValueError):
+                    mp_delta = 0
+                if mp_delta:
+                    derived = self.content.troop_maintenance_delta(str(row["troop_type"] or ""), mp_delta)
+                    if derived:
+                        raw_changes = {**raw_changes, "maintenance_per_turn": derived}
             for raw_field, value in raw_changes.items():
                 field = ARMY_FIELD_ALIASES.get(str(raw_field).strip(), str(raw_field).strip())
                 if field == "reason":
@@ -432,7 +458,11 @@ class _ArmiesMixin:
         new_armies: List[Dict[str, object]],
         actor: str = "档房",
     ) -> List[Dict[str, object]]:
-        """据 extractor 输出建新军队。同 id/name 已存在 → 把 manpower 当扩军增量。owner_power 必须是已知 power。"""
+        """据 extractor 输出建新军队。owner_power 必须是已知 power。
+
+        既有军扩编/裁撤只能走 army_delta 的显式增减量；new_armies 的 manpower
+        是新军初值，重复 id/name 不能自动并入旧军，否则会把现有人数当增兵导致翻倍。
+        """
         valid_powers = {r["id"] for r in self.conn.execute("SELECT id FROM powers").fetchall()}
         created: List[Dict[str, object]] = []
         for raw in new_armies:
@@ -451,31 +481,16 @@ class _ArmiesMixin:
                 print(f"[WARN] new_armies owner_power '{owner}' 未在 powers → 跳过 {aid}")
                 continue
             name = str(item.get("name") or aid).strip()
-            # 查重：同 id 或 同 name → 转 manpower 扩军增量
+            # 查重：同 id 或 同 name → 跳过。既有军扩编必须走 army_delta 的显式增量，
+            # 不能把新建军队初值当扩军增量并入旧军。
             existing = self.conn.execute(
                 "SELECT id, name FROM armies WHERE id = ? OR name = ?", (aid, name)
             ).fetchone()
             if existing is not None:
-                manpower = item.get("manpower")
-                if manpower is None:
-                    print(f"[WARN] new_armies 重复 id/name '{aid}' 且无 manpower → 跳过")
-                    continue
-                try:
-                    delta = int(manpower)
-                except (TypeError, ValueError):
-                    print(f"[WARN] new_armies '{aid}' manpower 非整数 → 跳过")
-                    continue
-                if delta == 0:
-                    continue
-                reason = str(item.get("reason") or item.get("status") or "扩军")[:80]
-                pseudo_event = type("E", (), {"id": "season", "title": reason})()
-                self.apply_army_deltas(
-                    state, pseudo_event, None, actor, {existing["id"]: {"manpower": delta, "reason": reason}}
+                print(
+                    f"[WARN] new_armies 重复 id/name '{aid}'/'{name}'，"
+                    f"已存在 '{existing['id']}'/'{existing['name']}' → 跳过"
                 )
-                # 复活：已撤销番号（active=0）被重新募兵补满 → 翻回 active=1，
-                # 顺手把状态从「撤销」改成本次叙事状态（缺则给「重建」）。
-                self._reactivate_if_refilled(state, existing["id"], item, reason, pseudo_event, actor)
-                created.append({"army": existing["name"], "manpower_added": delta, "merged_into_existing": True})
                 continue
             # 必填字段
             try:

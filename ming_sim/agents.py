@@ -349,13 +349,62 @@ def _is_cols_rows_table(v: object) -> bool:
     return isinstance(v, dict) and set(v.keys()) == {"cols", "rows"}
 
 
+_TSV_COL_LABELS: Dict[str, Dict[str, str]] = {
+    "regions": {
+        "name": "地区", "kind": "类型", "population": "人口", "public_support": "民心",
+        "unrest": "动乱", "natural_disaster": "天灾", "human_disaster": "人祸",
+        "registered_land": "在册田", "hidden_land": "隐田", "tax_per_turn": "月税",
+        "gentry_resistance": "士绅阻力", "military_pressure": "军事压力",
+        "status": "状态", "controlled_by": "控制", "guan_min_tian": "官民田",
+        "wang_tian": "藩王庄田", "huang_tian": "皇庄", "tian_fu_li": "田赋亩率",
+        "liao_xiang_li": "辽饷亩率", "salt_tax": "盐税", "commerce_tax": "商税",
+        "grain_output": "粮产", "grain_stock": "余粮", "corruption": "腐败",
+        "fiscal": "财政JSON",
+    },
+    "armies": {
+        "name": "军队", "station": "驻地", "theater": "战区", "commander": "统帅",
+        "controller": "主管", "troop_type": "兵种", "manpower": "兵力",
+        "maintenance_per_turn": "月费", "supply": "补给", "morale": "士气",
+        "training": "训练", "equipment": "装备", "arrears": "欠饷",
+        "mobility": "机动", "loyalty": "忠诚", "status": "状态", "owner_power": "归属",
+    },
+    "buildings": {
+        "id": "编号", "region_id": "地区", "name": "建筑", "category": "类别",
+        "level": "等级", "condition": "完好", "maintenance": "维护费", "risk": "风险",
+        "output_metric": "产出去向", "output_amount": "产出量", "status": "状态",
+        "origin": "来源",
+    },
+    "court_roster": {
+        "name": "姓名", "office": "官职", "office_type": "官职类", "faction": "派系",
+        "status": "状态", "power_id": "势力", "location": "所在",
+    },
+    "issue_assignees": {
+        "name": "姓名", "office": "官职", "office_type": "官职类", "status": "状态",
+        "ability": "能力", "loyalty": "忠诚", "integrity": "清廉", "courage": "胆略",
+        "diplomacy": "外交", "martial": "军事", "stewardship": "管理",
+        "intrigue": "谋略", "learning": "学识", "faction": "派系",
+        "personal_skills": "特长", "style": "风格",
+    },
+    "departments": {
+        "id": "编号", "key": "键", "name": "衙门", "authority_scope": "权责",
+        "power": "权力", "effect_summary": "效果", "status": "状态", "origin": "来源",
+    },
+    "technologies": {
+        "id": "编号", "key": "键", "name": "科技", "category": "类别",
+        "effect_summary": "效果", "status": "状态", "origin": "来源",
+    },
+}
+
+
 def _table_to_tsv(name: str, table: Dict[str, object]) -> str:
     """{cols,rows} → 真 TSV 文本块（tab 分隔、换行分行）。
 
     放在 json.dumps 之外，避免 \\t/\\n 被 JSON 转义吃掉压缩收益（实测比 dict-of-rows -25%、
     比转义后塞进 JSON 再 -10%）。空表只吐表头行（空）。None → 空串。
     """
-    cols = [str(c) for c in (table.get("cols") or [])]
+    raw_cols = [str(c) for c in (table.get("cols") or [])]
+    labels = _TSV_COL_LABELS.get(name, {})
+    cols = [labels.get(c, c) for c in raw_cols]
     rows = table.get("rows") or []
     lines = ["\t".join(cols)]
     for r in rows:  # type: ignore[assignment]
@@ -409,6 +458,9 @@ def build_simulator_context(simulator_payload: Optional[Dict[str, object]]) -> s
     # decree_text or current_state appear early in this JSON block, DeepSeek can
     # only reuse the table prefix and misses later stable board context. Preserve
     # all data, but serialize low-churn metadata first and high-churn material last.
+    stable_rest_order = (
+        "preset_catalog",
+    )
     volatile_rest_order = (
         "current_state",
         "treasury_brief",
@@ -426,10 +478,14 @@ def build_simulator_context(simulator_payload: Optional[Dict[str, object]]) -> s
         "data_note",
     )
     rest_source = {k: v for k, v in payload.items() if k not in consumed}
+    stable_keys = {k for k in stable_rest_order if k in rest_source}
     volatile_keys = {k for k in volatile_rest_order if k in rest_source}
     rest: Dict[str, object] = {}
+    for key in stable_rest_order:
+        if key in rest_source:
+            rest[key] = rest_source[key]
     for key in rest_source:
-        if key not in volatile_keys:
+        if key not in stable_keys and key not in volatile_keys:
             rest[key] = rest_source[key]
     for key in volatile_rest_order:
         if key in rest_source:

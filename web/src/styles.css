@@ -1335,6 +1335,17 @@ select:focus-visible {
   background: rgba(255, 245, 215, 0.84);
 }
 
+.archive-character-action {
+  color: #7c2d22;
+  border-color: rgba(150, 55, 36, 0.32);
+  background: rgba(255, 239, 228, 0.62);
+}
+
+.archive-character-action:hover {
+  border-color: rgba(150, 55, 36, 0.55);
+  background: rgba(255, 229, 216, 0.86);
+}
+
 .panel-title {
   display: flex;
   align-items: center;
@@ -1397,10 +1408,18 @@ select:focus-visible {
 
 .minister-list-court .minister-card {
   width: 11vh;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .minister-list-court .minister-card-portrait-wrap {
   height: 20vh;
+}
+
+.minister-list-court .minister-card-portrait {
+  pointer-events: none;
+  -webkit-user-drag: none;
 }
 
 .court-meeting-toolbar {
@@ -2155,6 +2174,31 @@ select:focus-visible {
 .minister-card.ousted {
   opacity: 0.62;
   filter: grayscale(0.35);
+}
+
+.minister-card:has(.minister-restore-action) {
+  opacity: 0.72;
+}
+
+.minister-restore-action {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border: 1px solid rgba(57, 116, 79, 0.28);
+  border-radius: 6px;
+  color: #275f3d;
+  background: rgba(232, 246, 229, 0.9);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.minister-restore-action:hover {
+  border-color: rgba(57, 116, 79, 0.5);
+  background: rgba(216, 240, 211, 0.96);
 }
 
 /* 详情卡副标题里的官职，与状态徽标并排 */
@@ -8234,6 +8278,47 @@ button:disabled {
 
 .court-search {
   padding: 4px 8px 2px;
+}
+
+.arms-stock-panel {
+  margin: 4px 8px 2px;
+  padding: 6px 8px;
+  border: 1px solid rgba(180, 140, 60, 0.3);
+  border-radius: 4px;
+  background: rgba(255, 248, 222, 0.7);
+  flex-shrink: 0;
+}
+
+.arms-stock-title {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #6b4a18;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.arms-stock-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.arms-stock-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: rgba(180, 120, 30, 0.12);
+  border: 1px solid rgba(180, 120, 30, 0.25);
+  font-size: 0.74rem;
+  color: #4a3208;
+  white-space: nowrap;
+}
+
+.arms-stock-chip b {
+  font-size: 0.78rem;
+  color: #8a3a12;
 }
 
 .right-drawer-list {

@@ -82,6 +82,17 @@ infer_office_type_from_office` 照旧）。各 Mixin 共享 `self.conn` / `self.
 | `armies` | 军队盘面 | `id(PK), name, station, commander, troop_type, manpower, maintenance_per_turn, supply, morale, training, equipment, arrears, loyalty, owner_power`（`maintenance/tax_per_turn` 实为月值） |
 | `army_logs` | 军队字段变更留痕 | `turn, army_id, field, old/new_value, delta, reason, event_id, edict_id, actor` |
 
+### arms.py — 军事装备库存
+| 表 | 作用 | 关键字段 |
+|---|---|---|
+| `weapons` | 武器型号注册（weapons.json 打底 + 运行时 LLM 新增） | `id(PK), name, tier, power, cost, equip_per_unit, requires_tech, registered(seed/runtime)` |
+| `arms_stock` | 国家军备总库（一行一型号） | `weapon_id(PK→weapons), qty` |
+| `army_arms` | 拨发到军（某军持有某型号几件） | `(army_id, weapon_id) PK, qty` |
+| `arms_logs` | 军备变更流水（`army_id` NULL=总库变更） | `turn, weapon_id, army_id, old/new_value, delta, reason, source(building/issue/dispatch/war)` |
+
+> 版本化走 `kv_store(weapons_version)`；建筑产械入总库（flows 建筑 tick）、皇帝下旨 `dispatch_arms`
+> 拨发给某军提 `equipment`（硬卡只拨有的）。`requires_tech` 须 `technologies` 表已解锁方可产/造。
+
 ### buildings.py — 建筑/科技/衙门
 | 表 | 作用 | 关键字段 |
 |---|---|---|

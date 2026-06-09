@@ -179,7 +179,10 @@ class _RegionsMixin:
 
                 # ── fiscal JSON 子字段（corruption 等）────────────────────────
                 if field in FISCAL_SCORE_FIELDS or field in FISCAL_QUANTITY_FIELDS:
-                    fiscal: dict = json.loads(str(row["fiscal"] or "{}"))
+                    current_row = self.conn.execute(
+                        "SELECT fiscal FROM regions WHERE id = ?", (region_id,)
+                    ).fetchone()
+                    fiscal: dict = json.loads(str((current_row or row)["fiscal"] or "{}"))
                     old_value = fiscal.get(field, 50 if field in FISCAL_SCORE_FIELDS else 0)
                     delta = int(value)
                     if field in FISCAL_SCORE_FIELDS:

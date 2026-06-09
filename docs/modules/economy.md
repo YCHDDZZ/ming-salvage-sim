@@ -35,7 +35,7 @@
 | `guan_min_tian` | 万亩 | 官民田，田赋→国库 |
 | `wang_tian` | 万亩 | 藩王庄田，免税；没收后转皇庄 |
 | `huang_tian` | 万亩 | 皇庄，仅北直隶有，地租→内库 |
-| `liao_xiang` | 万两/月 | 辽饷月摊派额 |
+| `liao_xiang_li` | 毫/亩/年 | 辽饷亩率，按官民田实时摊派 |
 | `salt_tax` | 万两/月 | 盐税月基数，产盐省才>0 |
 | `commerce_tax` | 万两/月 | 商税月基数 |
 | `corruption` | 0-100 | 腐败度，影响解运比 |
@@ -67,11 +67,12 @@ liao_ratio = transport_ratio × (0.5 + 皇威 / 200)
 #### 第二步：各税源
 
 ```
-# 税种拆分：从 tax_per_turn 扣除辽饷/盐税/商税固定额，剩余为田赋基数
-田赋基数 = max(0, tax_per_turn - liao_xiang - salt_tax - commerce_tax)
+# 税种计算：田赋/辽饷按官民田×亩率折月，盐税/商税读省级月额
+田赋账面 = guan_min_tian × tian_fu_li / 10000 / 12
+辽饷账面 = guan_min_tian × liao_xiang_li / 10000 / 12
 
 田赋月收 = 田赋基数 × collection_rate × transport_ratio  → 国库
-辽饷月收 = liao_xiang × liao_ratio                       → 国库
+辽饷月收 = 辽饷账面 × liao_ratio                         → 国库
 盐税月收 = salt_tax × transport_ratio                     → 国库
 商税月收 = commerce_tax × transport_ratio                 → 国库
 

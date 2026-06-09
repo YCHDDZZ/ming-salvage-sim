@@ -33,7 +33,7 @@ from ming_sim.decree import (
 from ming_sim.issues import bind_content as _bind_issues
 from ming_sim.issues import sync_opening_legacies
 from ming_sim.llm_model import create_agno_db, extract_agent_text, verify_llm_available
-from ming_sim.matching import match_region_id_from_text
+from ming_sim.matching import match_army_id_from_text, match_region_id_from_text
 from ming_sim.models import Character, CourtContext, GameState, LLMConfig
 from ming_sim.paths import user_data_path
 from ming_sim.registry import MinisterRegistry, bind_content as _bind_registry
@@ -125,6 +125,8 @@ class ChatTurnResult:
     secret_order_id: int = 0       # 本轮新建密令 id（0=未下密令）
     tax_issue_id: int = 0          # 本轮户部调税立的 issue id（0=未调税）
     tax_adjusted: str = ""         # 本轮户部调税立项摘要（""=未调税）
+    arms_dispatched: str = ""      # 本轮兵部/工部拨发军械摘要（""=未拨发）
+    refresh_armies: List[str] = field(default_factory=list)  # 拨发后需刷新的军名
 
 
 @dataclass
@@ -285,8 +287,12 @@ def apply_appointment(
         power_id="ming",
         status="active",
     )
+    try:
+        db.add_character(state, character)
+    except ValueError as exc:
+        print(f"[WARN] 新建人物失败：{exc}")
+        return ("", displaced)
     content.characters[name] = character
-    db.add_character(state, character)
     # add_character 已写入并分配 portrait_id，回写到内存对象
     row = db.conn.execute(
         "SELECT portrait_id FROM characters WHERE name=?", (name,)
@@ -310,6 +316,7 @@ def _sync_offices_from_db_impl(content: GameContent, db: "GameDB") -> None:
                debut_year, debut_month, status, portrait_id, power_id, location,
                summary
         FROM characters
+        WHERE archived = 0
         """
     ).fetchall()
     characters: Dict[str, Character] = {}
@@ -562,7 +569,12 @@ class GameSession:
         augmented = message
         draft_line = self.registry.build_draft_line()
         if draft_line and draft_line != "无":
-            augmented = f"【本{TURN_UNIT}已核定草案】{draft_line}\n\n{augmented}"
+            augmented = (
+                f"【本{TURN_UNIT}已核定草案·仅供知会，勿重复】以下是本{TURN_UNIT}其他大臣已拟成入档的旨意，"
+                f"只为让你知道朝局已办了哪些事，避免撞车；你若拟旨，propose_directive 的 decree_text "
+                f"必须是你自己新写的圣旨正文，**绝不可照抄或复述下列任何一条**——\n{draft_line}\n\n"
+                f"{augmented}"
+            )
         run_output = agent.run(augmented)
         _dump_llm_messages(run_output, f"大臣对话/{minister_name}")
         answer = extract_agent_text(run_output)
@@ -633,6 +645,13 @@ class GameSession:
                 if issue_id:
                     result.tax_issue_id = issue_id
                     result.tax_adjusted = summary
+            elif tool_name == "dispatch_arms" or tool_result.startswith("__pending_arms_dispatch__"):
+                payload = tool_result.removeprefix("__pending_arms_dispatch__").strip()
+                summary, army_name = self._apply_arms_dispatch(payload, character)
+                if summary:
+                    result.arms_dispatched = summary
+                    if army_name:
+                        result.refresh_armies.append(army_name)
         return result
 
     def revoke_last_chat(self, minister_name: str) -> bool:
@@ -716,6 +735,35 @@ class GameSession:
         )
         return (issue_id, f"{title}（已立项 #{issue_id}，待结算推进）")
 
+    def _apply_arms_dispatch(self, payload: str, proposer: Character) -> Tuple[str, str]:
+        """兵部/工部 dispatch_arms 落地：总库→某军拨发军械（硬卡只拨有的），即时提该军装备。
+        返回 (摘要, 受拨军名)；非法/无命中返回 ("", "")。"""
+        import json as _json
+        try:
+            data = _json.loads(payload) if payload else {}
+        except (ValueError, TypeError):
+            return ("", "")
+        if not isinstance(data, dict):
+            return ("", "")
+        army_raw = str(data.get("army") or "").strip()
+        weapon = str(data.get("weapon") or "").strip()
+        reason = str(data.get("reason") or "").strip()
+        try:
+            qty = int(data.get("qty"))
+        except (TypeError, ValueError):
+            return ("", "")
+        if not army_raw or not weapon or qty <= 0:
+            return ("", "")
+        army_id = match_army_id_from_text(army_raw, self.content.armies)
+        if army_id is None:
+            return (f"拨发未果：未找到军队「{army_raw}」。", "")
+        res = self.db.apply_arms_dispatch(self.state, army_id, weapon, qty, reason=reason)
+        if not res.get("ok"):
+            return (f"拨发未果：{res.get('note') or '总库无此械'}。", "")
+        gain = res.get("equipment_gain") or 0
+        gain_txt = f"，装备+{gain}" if gain else ""
+        return (f"{res['army']}获拨{res['weapon']}{res['dispatched']}（{res.get('note','')}{gain_txt}）", res["army"])
+
     def _apply_unlisted_person_registration(self, payload: str) -> Tuple[str, bool]:
         """登记史实未预设/用户确认背景的人物，进入本局正式可召见人物池。"""
         import json as _json
@@ -769,8 +817,12 @@ class GameSession:
             status="active",
             summary=str(data.get("summary") or "").strip(),
         )
+        try:
+            self.db.add_character(self.state, character, source=source_label)
+        except ValueError as exc:
+            print(f"[WARN] 人物补档失败：{exc}")
+            return ("", False)
         self.content.characters[name] = character
-        self.db.add_character(self.state, character, source=source_label)
         row = self.db.conn.execute(
             "SELECT portrait_id FROM characters WHERE name=?", (name,)
         ).fetchone()

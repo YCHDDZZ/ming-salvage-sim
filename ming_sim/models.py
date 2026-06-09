@@ -144,7 +144,7 @@ class Region:
     # huang_tian    皇庄（万亩），产出→内库，仅北直隶有
     # wang_tian     藩王庄田（万亩），免税，禄米→国库支出
     # guan_min_tian 官民田（万亩），田赋→国库
-    # liao_xiang    辽饷月摊派额（万两）
+    # liao_xiang_li 辽饷亩率（毫/亩/年），按官民田摊派
     # salt_tax      盐税月基数（万两），产盐省才>0
     # commerce_tax  商税月基数（万两）
     # corruption    腐败度 0-100，影响解运比

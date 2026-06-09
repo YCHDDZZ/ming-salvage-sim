@@ -267,7 +267,8 @@ def build_minister_tools(character: Character, context: CourtContext,
         return f"__adjust_tax__{payload}"
 
     def propose_directive(decree_text: str) -> str:
-        """把已定处置方案拟成一道圣旨草稿呈给皇帝审阅。decree_text 为完整圣旨正文。"""
+        """把你这次议定的处置方案拟成一道圣旨草稿呈皇帝审阅。decree_text 必须是你**自己新撰写**的完整圣旨正文，
+        针对当前这件交办的事来写；绝不可照抄、复述上下文里【已核定草案】中别的大臣已入档的旨意。"""
         text = (decree_text or "").strip()
         if not text:
             return "拟旨失败：圣旨正文为空。"
@@ -291,6 +292,27 @@ def build_minister_tools(character: Character, context: CourtContext,
             ensure_ascii=False,
         )
         return f"__pending_appointment__{payload}"
+
+    def dispatch_arms(army: str, weapon: str, qty: int, reason: str = "") -> str:
+        """从国家军备总库拨发军械给某军（兵部/工部专属）。army＝受拨军号、weapon＝武器型号
+        （如「红夷大炮」「火铳」「燧发枪」）、qty＝拨发件数。拨发后该军装备提升。
+        注意：只能拨总库现有之械，库存不足按现存量照发；皇帝准奏后落地。"""
+        a = (army or "").strip()
+        w = (weapon or "").strip()
+        if not a or not w:
+            return "拨发失败：受拨军号或武器型号为空。"
+        try:
+            n = int(qty)
+        except (TypeError, ValueError):
+            return "拨发失败：拨发件数须为整数。"
+        if n <= 0:
+            return "拨发失败：拨发件数须为正。"
+        import json as _json
+        payload = _json.dumps(
+            {"army": a, "weapon": w, "qty": n, "reason": (reason or "").strip()},
+            ensure_ascii=False,
+        )
+        return f"__pending_arms_dispatch__{payload}"
 
     def register_unlisted_person(
         name: str,
@@ -516,6 +538,7 @@ def build_minister_tools(character: Character, context: CourtContext,
         "propose_appointment": propose_appointment,
         "check_treasury": check_treasury,
         "adjust_tax": adjust_tax,
+        "dispatch_arms": dispatch_arms,
     }
     grant = context.db.get_office_court_grant(character.office_type)
     for tool_name in (grant.get("court_tools") or []):
@@ -778,9 +801,11 @@ def build_extractor_tools(context: CourtContext):
                             military_pressure/corruption/population/registered_land/
                             hidden_land/tax_per_turn/natural_disaster/human_disaster/status
                             减人口写人口，禁止写军队人数
-        army_delta          军队变化 {army_id: {field:delta_or_new}}
+        army_delta          军队变化 {army_id: {field:delta_for_numeric_or_new_text}}
                             field 用短键：supply/morale/training/equipment/mobility/loyalty/
                             manpower/maintenance_per_turn/station/commander/troop_type/status/owner_power
+                            数值字段一律是增量；既有军 manpower/maintenance_per_turn 只许增加或减少，
+                            "补至八万/现有八万"须先按盘面换算差额，不能填目标值/现状值
                             owner_power 值可写中文势力名；禁止写 arrears/cohesion
         power_updates       别的势力三项简单属性 {power_id: {"威望":N,"实力":N,"经济":N}}
                             只写非大明势力；三项均为整数增量；不写立场/近动/状态
@@ -813,11 +838,8 @@ def build_extractor_tools(context: CourtContext):
                             scale_amount(月额按比例增减，value填百分比，削三成=-30)。
                             例：宗室禄米总额减至每月30万两 → {key:"宗室禄米_base",mode:"set_amount",value:30}
                             同段口径互相算不通（减至X、实减Y、从A到B矛盾）则留空，不猜增量。
-                            key只从财政系数表选：田赋_rate/辽饷_base/辽饷_rate/盐税_base/盐税_rate/
-                            商税_base/商税_rate/皇庄_base/皇庄_rate/织造_base/织造_rate/矿税_base/矿税_rate/
-                            宗室禄米_base/宗室禄米_rate/官俸_base/官俸_rate/工程_base/工程_rate/
-                            赈灾_base/赈灾_rate/宫廷_base/宫廷_rate/
-                            内廷俸_base/内廷俸_rate/妃嫔_base/妃嫔_rate
+                            key只从财政系数表现有项逐字选，不在表里的税基变化不要写这里。
+                            田赋/辽饷/盐税/商税走region_delta里的田赋亩率/辽饷亩率/盐税基数/商税基数。
         appointments        仅后宫纳妃 [{name,office,office_type:"后宫",reason,approved}]
                             decree_text明文"纳/册封/封/选 某某 为 位号"才立；朝臣一律不进此字段
         character_status_changes  大臣状态变更 [{name,status,reason}]
@@ -853,7 +875,7 @@ def build_extractor_tools(context: CourtContext):
           "new_issues": [{"kind":"initiative","title":"火器营试设","origin_kind":"decree","bar_value":20,"expected_months":10,"stage_text":"...","resolve_condition":"...","fail_condition":"...","ongoing_effects":{},"effect_on_resolve":{"metrics":{"皇威":3}},"effect_on_fail":{"metrics":{"皇威":-4}},"cancellable":"by_progress"}],
           "cancels": [],
           "close_issues": [{"issue_id":9,"reason":"resolved","narrative":"..."}],
-          "fiscal_changes": [{"key":"商税_base","mode":"delta_value","value":10,"reason":"加征商税"}],
+          "fiscal_changes": [{"key":"宗室禄米_base","mode":"delta_amount","value":-10,"reason":"裁减宗藩月支"}],
           "appointments": [],
           "character_status_changes": [{"name":"魏忠贤","status":"流放","reason":"发配凤阳"}],
           "office_changes": [{"name":"孙传庭","new_office":"陕西总督","new_office_type":"督抚","reason":"永城知县擢用"}]

@@ -567,6 +567,7 @@ export function ChatModal({
   onRejectDirective,
   onUndoLast,
   onOpenEdict,
+  onArchive,
   onClose,
 }: {
   minister: Minister;
@@ -590,6 +591,7 @@ export function ChatModal({
   onRejectDirective: (directiveId: number) => void;
   onUndoLast: () => void;
   onOpenEdict: () => void;
+  onArchive?: () => void;
   onClose: () => void;
 }) {
   const isCustom = minister.portrait_id?.startsWith("custom:");
@@ -602,6 +604,8 @@ export function ChatModal({
   const chatLogRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLTextAreaElement | null>(null);
   const displayMessages: ChatDisplayMessage[] = [...chat];
+  const chatDisabled = minister.status === "dead" || minister.status === "offstage";
+  const canArchive = minister.origin === "runtime" && minister.status !== "active";
 
   if (pendingUserMessage) {
     displayMessages.push({ role: "user", content: pendingUserMessage, pending: true });
@@ -622,11 +626,13 @@ export function ChatModal({
   }, [minister.name, chat, pendingUserMessage, streamingMinisterMessage, chatNotice, busy, error]);
 
   const handleSend = () => {
+    if (chatDisabled) return;
     onSend(input);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (chatDisabled) return;
     if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
     onSend(input);
@@ -638,6 +644,7 @@ export function ChatModal({
       onInput(suggestion.text);
       setTimeout(() => inputRef.current?.focus(), 0);
     } else {
+      if (chatDisabled) return;
       onSend(suggestion.text);
     }
   };
@@ -664,6 +671,12 @@ export function ChatModal({
           <ScrollText size={15} />
           转入诏书草案
         </button>
+        {canArchive && onArchive && (
+          <button className="secondary-action archive-character-action" onClick={onArchive}>
+            <Trash2 size={15} />
+            归档人物
+          </button>
+        )}
         <div className="chat-portrait-wrap">
           <MinisterPortrait primary={portraitPrimary} fallback={portraitFallback} name={minister.name} />
         </div>
@@ -737,18 +750,19 @@ export function ChatModal({
                 if (composerHint) onHint("");
               }}
               onKeyDown={handleKeyDown}
-              placeholder="问大臣军情、钱粮、地方，或要求他拟旨... Enter 发送，Shift+Enter 换行"
+              disabled={chatDisabled}
+              placeholder={chatDisabled ? "此人当前不可召对，但仍可查看旧话与取消收藏。" : "问大臣军情、钱粮、地方，或要求他拟旨... Enter 发送，Shift+Enter 换行"}
             />
           </label>
           <div className="composer-actions">
-            <button className={`primary-action ${!input.trim() ? "is-empty" : ""}`} onClick={handleSend} disabled={!!busy}>
+            <button className={`primary-action ${!input.trim() ? "is-empty" : ""}`} onClick={handleSend} disabled={!!busy || chatDisabled}>
               <Send size={15} />
               发送
             </button>
             <button
               className="secondary-action composer-undo"
               onClick={onUndoLast}
-              disabled={!!busy || !chat.some((m) => m.role === "minister")}
+              disabled={!!busy || chatDisabled || !chat.some((m) => m.role === "minister")}
               title="撤回最后一轮召对（删除上一问一答，并清掉大臣对应记忆）"
             >
               <Undo2 size={15} />
@@ -1128,8 +1142,11 @@ export function officeRank(office: string): number {
 
 export function filterMinisters(ministers: Minister[], group: string) {
   const courtMinisters = ministers.filter((m) => (m.power_id || "ming") === "ming");
+  const archivedMinisters = courtMinisters.filter((m) => m.archived);
+  const liveMinisters = courtMinisters.filter((m) => !m.archived);
+  if (group === "已归档") return archivedMinisters;
   if (group === "内阁+六部" || group === "内阁" || group === "六部") {
-    return courtMinisters
+    return liveMinisters
       .filter((m) =>
         (m.office_type === "内阁" || ["吏部", "户部", "礼部", "兵部", "刑部", "工部"].includes(m.office_type))
         && m.status === "active"
@@ -1138,8 +1155,8 @@ export function filterMinisters(ministers: Minister[], group: string) {
       )
       .sort((a, b) => officeRank(a.office || "") - officeRank(b.office || ""));
   }
-  if (group === "在职") return courtMinisters.filter((m) => m.status === "active");
-  if (group === "收藏") return courtMinisters.filter((minister) => minister.favorite);
+  if (group === "在职") return liveMinisters.filter((m) => m.status === "active");
+  if (group === "收藏") return liveMinisters.filter((minister) => minister.favorite);
   return courtMinisters;
 }
 

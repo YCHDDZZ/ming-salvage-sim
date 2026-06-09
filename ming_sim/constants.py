@@ -29,7 +29,7 @@ FISCAL_SCORE_FIELDS = ("corruption",)
 FISCAL_QUANTITY_FIELDS = (
     "grain_output", "grain_stock",
     "guan_min_tian", "wang_tian", "huang_tian", "tian_fu_li",
-    "liao_xiang", "salt_tax", "commerce_tax",
+    "liao_xiang_li", "salt_tax", "commerce_tax",
 )
 ARMY_SCORE_FIELDS = ("supply", "morale", "training", "equipment", "arrears", "mobility", "loyalty")
 ARMY_QUANTITY_FIELDS = ("manpower", "maintenance_per_turn")
@@ -127,7 +127,7 @@ REGION_FIELD_LABELS = {
     "wang_tian": "藩王庄田",
     "huang_tian": "皇庄",
     "tian_fu_li": "田赋亩率",
-    "liao_xiang": "辽饷基数",
+    "liao_xiang_li": "辽饷亩率",
     "salt_tax": "盐税基数",
     "commerce_tax": "商税基数",
 }
@@ -172,9 +172,11 @@ REGION_FIELD_ALIASES = {
     "tian_fu_li": "tian_fu_li",
     "田赋亩率": "tian_fu_li",
     "亩率": "tian_fu_li",
-    "liao_xiang": "liao_xiang",
-    "辽饷基数": "liao_xiang",
-    "辽饷": "liao_xiang",
+    "liao_xiang_li": "liao_xiang_li",
+    "liao_xiang": "liao_xiang_li",
+    "辽饷亩率": "liao_xiang_li",
+    "辽饷基数": "liao_xiang_li",
+    "辽饷": "liao_xiang_li",
     "salt_tax": "salt_tax",
     "盐税基数": "salt_tax",
     "盐税": "salt_tax",

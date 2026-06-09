@@ -231,6 +231,7 @@ export function GameSettingsModal({
     issue_log_limit?: number;
     secret_order_person_limit?: number;
     secret_order_total_limit?: number;
+    character_limit?: number;
     minister_temperature?: number;
     minister_top_p?: number;
     simulator_temperature?: number;
@@ -261,6 +262,9 @@ export function GameSettingsModal({
   );
   const [secretOrderTotalLimit, setSecretOrderTotalLimit] = React.useState<number>(
     initial?.secret_order_total_limit ?? 5
+  );
+  const [characterLimit, setCharacterLimit] = React.useState<number>(
+    initial?.character_limit ?? 120
   );
   const [ministerTemperature, setMinisterTemperature] = React.useState<number>(
     initial?.minister_temperature ?? 0.6
@@ -298,6 +302,7 @@ export function GameSettingsModal({
           issue_log_limit: issueLogLimit,
           secret_order_person_limit: secretOrderPersonLimit,
           secret_order_total_limit: secretOrderTotalLimit,
+          character_limit: characterLimit,
           minister_temperature: ministerTemperature,
           minister_top_p: ministerTopP,
           simulator_temperature: simulatorTemperature,
@@ -418,6 +423,22 @@ export function GameSettingsModal({
             <option value={15}>15 · 很多</option>
             <option value={20}>20 · 密网</option>
             <option value={50}>50 · 上限</option>
+          </select>
+        </label>
+        <label>
+          朝臣人物上限{" "}
+          <small className="menu-hint">
+            （本局未归档朝臣建档上限，后宫不计入。朝臣越多，大臣名册、召对背景与月末推演上下文越长，<b>token 消耗会增加。</b>）
+          </small>
+          <select
+            value={characterLimit}
+            onChange={(e) => setCharacterLimit(Number(e.target.value))}
+          >
+            <option value={80}>80 · 节省 token</option>
+            <option value={120}>120 · 默认</option>
+            <option value={160}>160 · 较多（token ↑）</option>
+            <option value={220}>220 · 很多（token ↑↑）</option>
+            <option value={300}>300 · 上限（token 大幅增加）</option>
           </select>
         </label>
         <label>

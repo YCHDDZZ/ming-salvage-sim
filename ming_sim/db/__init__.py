@@ -25,6 +25,7 @@ from ming_sim.db.factions import _FactionsMixin
 from ming_sim.db.powers import _PowersMixin
 from ming_sim.db.regions import _RegionsMixin
 from ming_sim.db.armies import _ArmiesMixin
+from ming_sim.db.arms import _ArmsMixin
 from ming_sim.db.buildings import _BuildingsMixin
 from ming_sim.db.issues import _IssuesMixin
 from ming_sim.db.memories import _MemoriesMixin
@@ -45,6 +46,7 @@ class GameDB(
     _PowersMixin,
     _RegionsMixin,
     _ArmiesMixin,
+    _ArmsMixin,
     _BuildingsMixin,
     _IssuesMixin,
     _MemoriesMixin,

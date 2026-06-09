@@ -256,43 +256,14 @@ function presetRequirementText(item: PresetTreeItem, pool: PresetTreeItem[]) {
   return `前置：${names.join("、")}`;
 }
 
-function assigneePct(minister: Minister | null) {
-  if (!minister) return null;
-  const ability = minister.ability ?? 50;
-  const loyalty = minister.loyalty ?? 50;
-  const integrity = minister.integrity ?? 50;
-  const courage = minister.courage ?? 50;
-  const domain = Math.max(
-    minister.diplomacy ?? 50,
-    minister.martial ?? 50,
-    minister.stewardship ?? 50,
-    minister.intrigue ?? 50,
-    minister.learning ?? 50,
-  );
-  const pct = Math.round(
-    (domain - 50) * 1.3
-    + (ability - 50) * 0.7
-    + (loyalty - 50) * 0.6
-    + (integrity - 50) * 0.5
-    + (courage - 50) * 0.4
-  );
-  return Math.max(-80, Math.min(80, pct));
-}
-
-function signedPct(value: number) {
-  return `${value > 0 ? "+" : ""}${value}%`;
-}
-
 function AssigneePreview({ minister }: { minister: Minister | null }) {
   if (!minister) {
     return <small className="manual-issue-hint">未指定承办人时，月末更容易按责任无着处理。</small>;
   }
-  const pct = assigneePct(minister) ?? 0;
   return (
     <div className="manual-assignee-card">
       <div className="manual-assignee-head">
         <b>{minister.name}</b>
-        <span className={pct >= 0 ? "positive" : "negative"}>承办修正 {signedPct(pct)}</span>
       </div>
       <div className="manual-assignee-office">{minister.office || minister.office_type || "无职"} · {minister.faction}</div>
       <div className="manual-assignee-stats">
@@ -311,14 +282,13 @@ function AssigneePreview({ minister }: { minister: Minister | null }) {
 }
 
 type AssigneeSortKey =
-  | "name" | "office" | "faction" | "pct" | "ability" | "loyalty" | "integrity" | "courage"
+  | "name" | "office" | "faction" | "ability" | "loyalty" | "integrity" | "courage"
   | "diplomacy" | "martial" | "stewardship" | "intrigue" | "learning";
 
 const ASSIGNEE_SORT_LABELS: Record<AssigneeSortKey, string> = {
   name: "姓名",
   office: "官职",
   faction: "派系",
-  pct: "修正",
   ability: "能力",
   loyalty: "忠诚",
   integrity: "清廉",
@@ -331,7 +301,6 @@ const ASSIGNEE_SORT_LABELS: Record<AssigneeSortKey, string> = {
 };
 
 function ministerSortValue(minister: Minister, key: AssigneeSortKey): string | number {
-  if (key === "pct") return assigneePct(minister) ?? -999;
   if (key === "office") return minister.office || minister.office_type || "";
   if (key === "faction") return minister.faction || "";
   if (key === "name") return minister.name || "";
@@ -344,7 +313,7 @@ function AssigneePickerModal({ ministers, selected, onSelect, onClose }: {
   onSelect: (name: string) => void;
   onClose: () => void;
 }) {
-  const [sortKey, setSortKey] = React.useState<AssigneeSortKey>("pct");
+  const [sortKey, setSortKey] = React.useState<AssigneeSortKey>("ability");
   const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
   const [query, setQuery] = React.useState("");
   const chooseSort = (key: AssigneeSortKey) => {
@@ -410,7 +379,6 @@ function AssigneePickerModal({ ministers, selected, onSelect, onClose }: {
                 {header("name", "name-col")}
                 {header("office", "office-col")}
                 {header("faction")}
-                {header("pct")}
                 {header("diplomacy")}
                 {header("martial")}
                 {header("stewardship")}
@@ -425,14 +393,12 @@ function AssigneePickerModal({ ministers, selected, onSelect, onClose }: {
             </thead>
             <tbody>
               {rows.map((m) => {
-                const pct = assigneePct(m) ?? 0;
                 const picked = selected === m.name;
                 return (
                   <tr key={m.name} className={picked ? "selected" : ""} onDoubleClick={() => { onSelect(m.name); onClose(); }}>
                     <td className="name-col"><b>{m.name}</b></td>
                     <td className="office-col">{m.office || m.office_type || "无职"}</td>
                     <td>{m.faction || "未载"}</td>
-                    <td className={pct >= 0 ? "positive" : "negative"}>{signedPct(pct)}</td>
                     <td>{m.diplomacy ?? 50}</td>
                     <td>{m.martial ?? 50}</td>
                     <td>{m.stewardship ?? 50}</td>
@@ -451,7 +417,7 @@ function AssigneePickerModal({ ministers, selected, onSelect, onClose }: {
                 );
               })}
               {!rows.length ? (
-                <tr><td colSpan={14} className="assignee-empty">没有匹配的大臣。</td></tr>
+                <tr><td colSpan={13} className="assignee-empty">没有匹配的大臣。</td></tr>
               ) : null}
             </tbody>
           </table>

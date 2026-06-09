@@ -30,8 +30,8 @@
       "condition": 55,
       "maintenance": 1,
       "risk": 45,
-      "output_metric": "",
-      "output_amount": 0,
+      "output_metric": "huochong",
+      "output_amount": 800,
       "status": "工匠流失、料劣，所造鸟铳多有炸膛。"
     },
     {
@@ -290,8 +290,8 @@
       "condition": 56,
       "maintenance": 1,
       "risk": 38,
-      "output_metric": "",
-      "output_amount": 0,
+      "output_metric": "folangji",
+      "output_amount": 4,
       "status": "防倭备海，铜炮老旧。"
     },
     {

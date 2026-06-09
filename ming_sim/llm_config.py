@@ -22,6 +22,7 @@ GAME_SETTINGS_DEFAULTS = {
     "issue_log_limit": 6,  # 每条 active 局势注入推演的最近推进日志条数。
     "secret_order_person_limit": 1,  # 单个承办人同时进行中的密令上限。
     "secret_order_total_limit": 5,  # 全朝同时进行中的密令总上限。
+    "character_limit": 120,  # 本局朝臣人物建档上限；后宫不计入。调高会增加名册/推演 token 消耗。
     "minister_temperature": 0.6,  # 大臣 agent 采样温度。
     "minister_top_p": 0.9,  # 大臣 agent nucleus sampling。
     "simulator_temperature": 0.5,  # 推演 agent 采样温度。
@@ -215,6 +216,10 @@ def load_runtime_game() -> Dict[str, object]:
         out["secret_order_total_limit"] = max(1, min(50, int(data.get("secret_order_total_limit", out["secret_order_total_limit"]))))
     except (TypeError, ValueError):
         pass
+    try:
+        out["character_limit"] = max(40, min(300, int(data.get("character_limit", out["character_limit"]))))
+    except (TypeError, ValueError):
+        pass
     for key in (
         "minister_temperature",
         "minister_top_p",
@@ -246,6 +251,7 @@ def save_runtime_game(
     issue_log_limit: int = 6,
     secret_order_person_limit: int = 1,
     secret_order_total_limit: int = 5,
+    character_limit: int = 120,
     minister_temperature: float = 0.6,
     minister_top_p: float = 0.9,
     simulator_temperature: float = 0.5,
@@ -263,6 +269,7 @@ def save_runtime_game(
         "issue_log_limit": max(0, min(50, int(issue_log_limit))),
         "secret_order_person_limit": max(1, min(10, int(secret_order_person_limit))),
         "secret_order_total_limit": max(1, min(50, int(secret_order_total_limit))),
+        "character_limit": max(40, min(300, int(character_limit))),
         "minister_temperature": _clamp_float(minister_temperature, 0.6, 0.0, 1.0),
         "minister_top_p": _clamp_float(minister_top_p, 0.9, 0.0, 1.0),
         "simulator_temperature": _clamp_float(simulator_temperature, 0.5, 0.0, 1.0),

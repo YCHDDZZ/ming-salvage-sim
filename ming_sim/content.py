@@ -225,8 +225,12 @@ def load_building_content() -> Dict[str, Building]:
         if category not in BUILDING_CATEGORIES:
             raise SystemExit(f"{ctx}: category '{category}' 不在白名单 {BUILDING_CATEGORIES}。")
         output_metric = str(item.get("output_metric") or "")
-        if output_metric not in BUILDING_OUTPUT_METRICS:
-            raise SystemExit(f"{ctx}: output_metric '{output_metric}' 不在白名单 {BUILDING_OUTPUT_METRICS}。")
+        # output_metric 可以是四大指标白名单，或某武器型号 id（建筑产械入总库）。
+        if output_metric not in BUILDING_OUTPUT_METRICS and output_metric not in _weapon_id_set():
+            raise SystemExit(
+                f"{ctx}: output_metric '{output_metric}' 既不在指标白名单 {BUILDING_OUTPUT_METRICS}，"
+                f"也不是已知武器型号 id（见 weapons.json）。"
+            )
         buildings[building_id] = Building(
             id=building_id,
             region_id=str_field(item, "region_id", ctx),
@@ -486,6 +490,124 @@ def load_fiscal_config() -> "List[Dict[str, object]]":
     return [{"__schema_version": schema_version}, *items]
 
 
+def load_troop_cost() -> "Dict[str, object]":
+    """兵种月饷单价表（content/troop_cost.json）。无 fallback，缺字段直接 SystemExit。
+
+    返回 {"version", "default_tier", "tiers": [{"tier","per_kilo","keywords":[...]}, ...]}。
+    tiers 顺序＝匹配优先级（从贵到便宜）；扩缩军按 troop_type 串关键词命中最贵档算单价。
+    """
+    raw = require_dict(load_json_asset("troop_cost.json"), "troop_cost.json")
+    version = int_field(raw, "version", "troop_cost.json")
+    default_tier = str_field(raw, "default_tier", "troop_cost.json")
+    tiers_raw = require_list(raw.get("tiers"), "troop_cost.json.tiers")
+    tiers: List[Dict[str, object]] = []
+    names: Set[str] = set()
+    for idx, entry in enumerate(tiers_raw):
+        path = f"troop_cost.json.tiers[{idx}]"
+        item = require_dict(entry, path)
+        tier = str_field(item, "tier", path)
+        if tier in names:
+            raise SystemExit(f"{path}: tier 重复：{tier}")
+        names.add(tier)
+        if "per_kilo" not in item:
+            raise SystemExit(f"{path}: 缺 per_kilo")
+        try:
+            per_kilo = float(item["per_kilo"])
+        except (TypeError, ValueError):
+            raise SystemExit(f"{path}: per_kilo 非数值：{item['per_kilo']!r}")
+        if per_kilo < 0:
+            raise SystemExit(f"{path}: per_kilo 不可为负：{per_kilo}")
+        keywords = string_list(item.get("keywords"), f"{path}.keywords")
+        if not keywords:
+            raise SystemExit(f"{path}: keywords 不可为空")
+        tiers.append({"tier": tier, "per_kilo": per_kilo, "keywords": keywords})
+    if default_tier not in names:
+        raise SystemExit(f"troop_cost.json: default_tier '{default_tier}' 不在 tiers 中")
+    return {"version": version, "default_tier": default_tier, "tiers": tiers}
+
+
+def _slug_weapon_id(name: str) -> str:
+    """LLM 新出型号无英文 id 时，由名生成安全 id。ASCII 直接小写连字符，
+    中文则退化成 `weapon_<hex>`（稳定可复现，同名同 id，供 arms 表主键去重）。"""
+    import re as _re, hashlib as _hashlib
+    ascii_slug = _re.sub(r"[^a-z0-9]+", "_", str(name).strip().lower()).strip("_")
+    if ascii_slug:
+        return ascii_slug
+    return "weapon_" + _hashlib.md5(str(name).strip().encode("utf-8")).hexdigest()[:8]
+
+
+def _float_field(data: Dict[str, object], key: str, path: str) -> float:
+    if key not in data:
+        raise SystemExit(f"{path}: 缺 {key}")
+    try:
+        return float(data[key])  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        raise SystemExit(f"{path}: {key} 非数值：{data[key]!r}")
+
+
+def _weapon_id_set() -> "Set[str]":
+    """weapons.json 里所有预设武器 id 集合，供 buildings.json 的 output_metric 校验放行。
+    轻量直读（不经 GameContent），与 load_weapons 同源。"""
+    raw = require_dict(load_json_asset("weapons.json"), "weapons.json")
+    return {str(w.get("id")) for w in require_list(raw.get("weapons"), "weapons.json.weapons")
+            if isinstance(w, dict) and w.get("id")}
+
+
+def load_weapons() -> "Dict[str, object]":
+    """军事装备型号表（content/weapons.json）。无 fallback，缺字段直接 SystemExit。
+
+    返回 {"version", "default_tier", "tiers": {名: {power,cost,equip_per_unit,keywords}},
+          "weapons": [{id,name,tier,power,cost,equip_per_unit,requires_tech}, ...]}。
+    建筑按 output_metric=武器id 产械入总库；拨发给某军按 equip_per_unit 提 equipment。
+    requires_tech＝前置科技中文名（须在 technologies 表已解锁，空＝无门槛）。
+    LLM 推演新出未列型号→按 tiers[*].keywords 归档、给默认属性动态注册（见 weapon_meta）。
+    """
+    raw = require_dict(load_json_asset("weapons.json"), "weapons.json")
+    version = int_field(raw, "version", "weapons.json")
+    default_tier = str_field(raw, "default_tier", "weapons.json")
+    tiers_raw = require_dict(raw.get("tiers"), "weapons.json.tiers")
+    tiers: Dict[str, Dict[str, object]] = {}
+    for tier_name, tier_val in tiers_raw.items():
+        tpath = f"weapons.json.tiers[{tier_name}]"
+        tdict = require_dict(tier_val, tpath)
+        tiers[str(tier_name)] = {
+            "power": int_field(tdict, "power", tpath),
+            "cost": int_field(tdict, "cost", tpath),
+            "equip_per_unit": _float_field(tdict, "equip_per_unit", tpath),
+            "keywords": string_list(tdict.get("keywords"), f"{tpath}.keywords"),
+        }
+    if default_tier not in tiers:
+        raise SystemExit(f"weapons.json: default_tier '{default_tier}' 不在 tiers 中")
+    weapons_raw = require_list(raw.get("weapons"), "weapons.json.weapons")
+    weapons: List[Dict[str, object]] = []
+    seen_ids: Set[str] = set()
+    seen_names: Set[str] = set()
+    for idx, entry in enumerate(weapons_raw):
+        path = f"weapons.json.weapons[{idx}]"
+        item = require_dict(entry, path)
+        wid = str_field(item, "id", path)
+        name = str_field(item, "name", path)
+        tier = str_field(item, "tier", path)
+        if wid in seen_ids:
+            raise SystemExit(f"{path}: 武器 id 重复：{wid}")
+        if name in seen_names:
+            raise SystemExit(f"{path}: 武器名重复：{name}")
+        if tier not in tiers:
+            raise SystemExit(f"{path}: tier '{tier}' 不在 tiers 中")
+        seen_ids.add(wid)
+        seen_names.add(name)
+        weapons.append({
+            "id": wid,
+            "name": name,
+            "tier": tier,
+            "power": int_field(item, "power", path),
+            "cost": int_field(item, "cost", path),
+            "equip_per_unit": _float_field(item, "equip_per_unit", path),
+            "requires_tech": str(item.get("requires_tech") or ""),
+        })
+    return {"version": version, "default_tier": default_tier, "tiers": tiers, "weapons": weapons}
+
+
 @dataclass
 class GameContent:
     """游戏全部静态设定。GameContent.load() 一次性读盘填充。
@@ -532,6 +654,8 @@ class GameContent:
     ending_summary_prompt: str = ""
 
     fiscal_items: List[Dict[str, object]] = field(default_factory=list)
+    troop_cost: Dict[str, object] = field(default_factory=dict)
+    weapons: Dict[str, object] = field(default_factory=dict)
 
     @classmethod
     def load(cls) -> "GameContent":
@@ -570,6 +694,8 @@ class GameContent:
             office_grant_version=office_grant_version,
             office_definitions=office_definitions,
             fiscal_items=load_fiscal_config(),
+            troop_cost=load_troop_cost(),
+            weapons=load_weapons(),
             skill_tool_templates=dict_of_strings(load_json_asset("skill_tools.json"), "skill_tools.json"),
             game_world_prompt=load_text_asset("prompts/game_world.md"),
             minister_agent_prompt=load_text_asset("prompts/minister_agent.md"),
@@ -588,6 +714,60 @@ class GameContent:
             minister_recap_prompt=load_text_asset("prompts/minister_recap.md"),
             ending_summary_prompt=load_text_asset("prompts/ending_summary.md"),
         )
+
+    def troop_cost_per_kilo(self, troop_type: str) -> float:
+        """据 troop_type 自由组合串匹配兵种档，返回每千人月饷单价（万两）。
+        tiers 按从贵到便宜排序，命中第一档即返回（即取军内最贵兵种）；都不命中走 default_tier。
+        """
+        tiers = self.troop_cost.get("tiers") or []
+        text = str(troop_type or "")
+        for tier in tiers:
+            for kw in tier.get("keywords", []):
+                if kw and kw in text:
+                    return float(tier["per_kilo"])
+        default_tier = self.troop_cost.get("default_tier")
+        for tier in tiers:
+            if tier.get("tier") == default_tier:
+                return float(tier["per_kilo"])
+        return 0.0
+
+    def troop_maintenance_delta(self, troop_type: str, manpower_delta: int) -> int:
+        """扩缩军兵力增量 → 军费增量（万两，四舍五入）。单价＝troop_cost_per_kilo，
+        manpower 单位＝人，单价单位＝万两/千人，故 ÷1000。"""
+        rate = self.troop_cost_per_kilo(troop_type)
+        return round(rate * manpower_delta / 1000.0)
+
+    def weapon_meta(self, name_or_id: str) -> Dict[str, object]:
+        """据武器 id 或中文名解析型号元数据。命中预设→返回其条目；
+        未列型号（LLM 新出）→按 tiers[*].keywords 归 tier（从重到轻顺序匹配），
+        取该 tier 默认属性、requires_tech 默认空、id 由名生成，registered='runtime'。
+        返回 {id,name,tier,power,cost,equip_per_unit,requires_tech,registered}。"""
+        key = str(name_or_id or "").strip()
+        for w in self.weapons.get("weapons", []):
+            if key == w["id"] or key == w["name"]:
+                return {**w, "registered": "seed"}
+        # 动态归 tier：tiers dict 保留 JSON 顺序（重炮…轻火器），命中第一档即归
+        tiers: Dict[str, object] = self.weapons.get("tiers", {})  # type: ignore[assignment]
+        chosen = self.weapons.get("default_tier", "")
+        for tier_name, tdef in tiers.items():
+            for kw in tdef.get("keywords", []):  # type: ignore[union-attr]
+                if kw and kw in key:
+                    chosen = tier_name
+                    break
+            else:
+                continue
+            break
+        tdef = tiers.get(chosen, {})  # type: ignore[assignment]
+        return {
+            "id": _slug_weapon_id(key),
+            "name": key,
+            "tier": chosen,
+            "power": int(tdef.get("power", 1)),  # type: ignore[union-attr]
+            "cost": int(tdef.get("cost", 1)),
+            "equip_per_unit": float(tdef.get("equip_per_unit", 0.4)),
+            "requires_tech": "",
+            "registered": "runtime",
+        }
 
     # office_court_grants 仅作 DB seed 源（db.init_office_grants 灌进 offices.court_grant_json）；
     # 运行时 court tool 挂载 / agno skill 注入 / 前端 chip 全读 DB（db.get_office_court_grant），不读 content。

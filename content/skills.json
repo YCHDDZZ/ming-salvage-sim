@@ -1,5 +1,5 @@
 {
-  "__office_grant_version": 1,
+  "__office_grant_version": 2,
   "office_default_skills": {
     "内阁": {
       "court_tools": [
@@ -32,14 +32,30 @@
       ]
     },
     "兵部": {
-      "court_tools": [],
+      "court_tools": [
+        "dispatch_arms"
+      ],
       "agno_skills": [],
-      "chips": []
+      "chips": [
+        {
+          "label": "拨发军械",
+          "text": "拨发军械如下：从军备总库拨 [武器型号，如红夷大炮/火铳/燧发枪] [件数] 予 [受拨军号]。",
+          "prefix": true
+        }
+      ]
     },
     "工部": {
-      "court_tools": [],
+      "court_tools": [
+        "dispatch_arms"
+      ],
       "agno_skills": [],
-      "chips": []
+      "chips": [
+        {
+          "label": "拨发军械",
+          "text": "拨发军械如下：从军备总库拨 [武器型号，如红夷大炮/火铳/燧发枪] [件数] 予 [受拨军号]。",
+          "prefix": true
+        }
+      ]
     },
     "礼部": {
       "court_tools": [

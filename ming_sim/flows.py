@@ -75,10 +75,10 @@ def calc_province_fiscal(
 ) -> Tuple[int, int, List[Dict]]:
     """按省计算月度财政收入。
 
-    田赋/辽饷按亩率从基准算（content/regions.json 预算时已 官民田×亩率 落成月额）：
+    田赋/辽饷按官民田×亩率实时计算：
       tax_per_turn = 该省田赋账面月额（万两）        ← 不再是四税合计，就是田赋
-      fiscal.liao_xiang = 辽饷账面月额（万两）        ← 官民田×辽饷亩率
-    盐税/商税不按亩，仍读 fiscal.salt_tax / commerce_tax 基数。
+      fiscal.liao_xiang_li = 辽饷亩率（毫/亩/年）      ← 按官民田摊派
+    盐税/商税不按亩，仍读 fiscal.salt_tax / commerce_tax 账面应征月额。
     四税各乘综合到账率 eff（辽饷再受皇威折扣）。皇庄地租单独走内库（huang_tian×租率）。
 
     返回 (国库月收合计, 内库月收合计, 明细列表)。
@@ -107,7 +107,7 @@ def calc_province_fiscal(
 
         guan_min_tian = fiscal.get("guan_min_tian", 0)
         huang_tian   = fiscal.get("huang_tian", 0)
-        liao_xiang   = fiscal.get("liao_xiang", 0)
+        liao_xiang_li = fiscal.get("liao_xiang_li", 0)
         salt_tax     = fiscal.get("salt_tax", 0)
         commerce_tax = fiscal.get("commerce_tax", 0)
 
@@ -116,6 +116,10 @@ def calc_province_fiscal(
         tian_fu_li = int(fiscal.get("tian_fu_li", tian_fu_li_global))
         tian_fu_base = round(guan_min_tian * tian_fu_li / 10000 / 12)
 
+        # 辽饷账面月额 = 官民田万亩 × 辽饷亩率(毫/亩/年) / 10000 / 12。
+        # 这样清丈后 guan_min_tian 增减会自动牵动辽饷摊派。
+        liao_xiang_base = round(guan_min_tian * int(liao_xiang_li or 0) / 10000 / 12)
+
         # 综合到账率（单一系数，上限1.0，改革后可接近满额）
         eff = _province_efficiency(fiscal, gentry, unrest)
 
@@ -123,9 +127,9 @@ def calc_province_fiscal(
         liao_eff = eff * (0.5 + wei / 200)
         liao_eff = max(0.10, min(1.00, liao_eff))
 
-        # 四税各乘综合到账率（田赋/辽饷账面已是亩率算出的月额，直接乘 eff）
+        # 四税各乘综合到账率（田赋/辽饷账面按田亩摊成月额，再乘 eff）
         tian_fu  = round(tian_fu_base * eff)
-        liao     = round(liao_xiang   * liao_eff)
+        liao     = round(liao_xiang_base * liao_eff)
         salt     = round(salt_tax     * eff)
         commerce = round(commerce_tax * eff)
 
@@ -700,6 +704,8 @@ def apply_fixed_period_flows(db: GameDB, state: GameState) -> List[Dict[str, obj
     building_rows = db.conn.execute(
         "SELECT id, name, category, condition, maintenance, output_metric, output_amount FROM buildings"
     ).fetchall()
+    # 武器型号 id 集合：output_metric 命中则该建筑产械入军备总库（见下分支）。
+    weapon_ids = {str(r["id"]) for r in db.conn.execute("SELECT id FROM weapons").fetchall()}
     for row in building_rows:
         bid = str(row["id"])
         name = str(row["name"])
@@ -721,6 +727,13 @@ def apply_fixed_period_flows(db: GameDB, state: GameState) -> List[Dict[str, obj
                 state.metrics[metric] = max(0, min(100, before + produced))
                 flows.append({"dir": "score", "metric": metric, "category": "建筑产出",
                               "building": name, "amount": state.metrics[metric] - before})
+        elif metric in weapon_ids:
+            # 军械建筑产武器入总库（免费，料钱已含在建筑维护费）。前置科技未解锁则空转不产。
+            if produced > 0 and db.weapon_unlocked(metric):
+                new_qty = db.add_arms_stock(state, metric, produced, source="building",
+                                            reason=f"{name}{TURN_UNIT}产械")
+                flows.append({"dir": "arms", "weapon": metric, "category": "建筑产械",
+                              "building": name, "amount": produced, "stock": new_qty})
 
         if maintenance > 0:
             maint_account = "内库" if category == "内廷" else "国库"

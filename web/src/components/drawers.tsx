@@ -1,11 +1,12 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { Check, Crown, Info, Landmark, MapPinned, MessageSquareText, ScrollText, Star, Swords, X } from "lucide-react";
+import { Check, Crown, Info, Landmark, MapPinned, MessageSquareText, RotateCcw, ScrollText, Star, Swords, X } from "lucide-react";
 import { MinisterPortrait, PortraitUploadButton, RightDrawer, cacheBust, courtSlots, loadCourtPos, saveCourtPos, snapToSlot } from "./hud";
 import { formatMoney, formatSignedMoney, regionMonthlyTax } from "../format";
-import type { Army, Building, CourtChatMessage, Department, GameState, Issue, MapNode, Minister, Region, Technology } from "../types";
+import type { Army, ArmsStockItem, Building, CourtChatMessage, Department, GameState, Issue, MapNode, Minister, Region, Technology } from "../types";
 
 const canAttendCourtChat = (minister: Minister) => {
+  if (minister.archived) return false;
   const office = (minister.office || "").trim();
   if (minister.status !== "active" || !office) return false;
   return !/(已故|罢居|罢闲|赋闲|致仕|养病|丁忧|归籍|在野)/.test(office);
@@ -43,6 +44,7 @@ export function MinisterCardList({
   selectedMinister,
   emptyNote,
   onOpenChat,
+  onRestoreMinister,
   onUploadPortrait,
   courtMode = false,
   courtBubbles = {},
@@ -58,6 +60,7 @@ export function MinisterCardList({
   selectedMinister: string;
   emptyNote: string;
   onOpenChat: (minister: Minister) => void;
+  onRestoreMinister?: (minister: Minister) => void;
   onUploadPortrait?: (ministerName: string, file: File) => Promise<void>;
   courtMode?: boolean;
   courtBubbles?: Record<string, string>;
@@ -71,9 +74,10 @@ export function MinisterCardList({
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [positions, setPositions] = React.useState<Record<string, { px: number; py: number }>>({});
   const savedPosRef = React.useRef<Record<string, { px: number; py: number }> | null>(null);
-  const dragging = React.useRef<{ name: string; startMX: number; startMY: number; startPX: number; startPY: number } | null>(null);
+  const dragging = React.useRef<{ name: string; pointerId: number; startMX: number; startMY: number; startPX: number; startPY: number } | null>(null);
   const orderDragging = React.useRef<string | null>(null);
   const didDrag = React.useRef(false);
+  const suppressNextClick = React.useRef(false);
 
   // 固定职位 → 固定槽位（由 office 文字推导：office 逗号分项里命中即占该槽）
   const FIXED_SLOTS: { role: string; side: "left" | "right"; slot: number }[] = [
@@ -161,55 +165,79 @@ export function MinisterCardList({
     return () => { cancelled = true; };
   }, [listKey]);
 
-  const onMouseDown = (e: React.MouseEvent, name: string) => {
-    if ((e.target as HTMLElement).closest(".portrait-upload-btn")) return;
-    e.preventDefault();
-    const pos = positions[name] || { px: 0.5, py: 0.8 };
-    dragging.current = { name, startMX: e.clientX, startMY: e.clientY, startPX: pos.px, startPY: pos.py };
-    didDrag.current = false;
-
-    const onMove = (ev: MouseEvent) => {
-      if (!dragging.current) return;
-      const dx = ev.clientX - dragging.current.startMX;
-      const dy = ev.clientY - dragging.current.startMY;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didDrag.current = true;
-      const el = containerRef.current;
-      if (!el) return;
-      const { width, height } = el.getBoundingClientRect();
-      // 拖动增量转百分比
-      const npx = Math.max(0, Math.min(1, dragging.current.startPX + dx / width));
-      const npy = Math.max(0, Math.min(1, dragging.current.startPY + dy / height));
+  const finishCourtDrag = React.useCallback((shouldSnap: boolean) => {
+    const dragName = dragging.current?.name;
+    if (dragName && shouldSnap) {
       setPositions((prev) => {
-        const next = { ...prev, [dragging.current!.name]: { px: npx, py: npy } };
+        const cur = prev[dragName];
+        if (!cur) return prev;
+        const occupied = new Set<string>();
+        const snapped = snapToSlot(cur.px, cur.py, occupied, "");
+        const next = { ...prev, [dragName]: snapped };
         savedPosRef.current = next;
         saveCourtPos(next);
         return next;
       });
-    };
-    const onUp = () => {
-      if (dragging.current && didDrag.current) {
-        // 松手时吸附到最近槽位
-        const dragName = dragging.current.name;
-        setPositions((prev) => {
-          const cur = prev[dragName];
-          if (!cur) return prev;
-          // 已占槽位（其他大臣）
-          const occupied = new Set<string>();
-          // 找吸附目标
-          const snapped = snapToSlot(cur.px, cur.py, occupied, "");
-          const next = { ...prev, [dragName]: snapped };
-          savedPosRef.current = next;
-          saveCourtPos(next);
-          return next;
-        });
-      }
-      dragging.current = null;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    } else if (savedPosRef.current) {
+      saveCourtPos(savedPosRef.current);
+    }
+    dragging.current = null;
+    if (shouldSnap) {
+      suppressNextClick.current = true;
+      window.setTimeout(() => {
+        suppressNextClick.current = false;
+        didDrag.current = false;
+      }, 0);
+    } else {
+      didDrag.current = false;
+    }
+  }, []);
+
+  const onCourtPointerDown = (e: React.PointerEvent<HTMLButtonElement>, name: string) => {
+    if ((e.target as HTMLElement).closest(".portrait-upload-btn")) return;
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const pos = positions[name] || { px: 0.5, py: 0.8 };
+    dragging.current = { name, pointerId: e.pointerId, startMX: e.clientX, startMY: e.clientY, startPX: pos.px, startPY: pos.py };
+    didDrag.current = false;
+    e.currentTarget.setPointerCapture(e.pointerId);
   };
+
+  const onCourtPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragging.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const dx = e.clientX - drag.startMX;
+    const dy = e.clientY - drag.startMY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didDrag.current = true;
+    const el = containerRef.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+    if (!width || !height) return;
+    const npx = Math.max(0, Math.min(1, drag.startPX + dx / width));
+    const npy = Math.max(0, Math.min(1, drag.startPY + dy / height));
+    setPositions((prev) => {
+      const next = { ...prev, [drag.name]: { px: npx, py: npy } };
+      savedPosRef.current = next;
+      return next;
+    });
+  };
+
+  const onCourtPointerEnd = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragging.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+    finishCourtDrag(didDrag.current);
+  };
+
+  React.useEffect(() => {
+    const cancelDrag = () => finishCourtDrag(false);
+    window.addEventListener("blur", cancelDrag);
+    window.addEventListener("contextmenu", cancelDrag);
+    return () => {
+      window.removeEventListener("blur", cancelDrag);
+      window.removeEventListener("contextmenu", cancelDrag);
+    };
+  }, [finishCourtDrag]);
 
   if (!list.length) return <div className={courtMode ? "minister-list minister-list-court" : "minister-list"}><div className="empty-note">{emptyNote}</div></div>;
 
@@ -259,6 +287,7 @@ export function MinisterCardList({
                   if (selectable) onToggleSelect?.(minister);
                   return;
                 }
+                if (minister.archived) return;
                 onOpenChat(minister);
               }}>
               <div className="minister-card-portrait-wrap">
@@ -279,6 +308,26 @@ export function MinisterCardList({
                 <span className="minister-bio">{minister.summary}</span>
               </div>
               {minister.favorite && <Star className="favorite-mark" size={13} />}
+              {minister.archived && onRestoreMinister && (
+                <span
+                  className="minister-restore-action"
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRestoreMinister(minister);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onRestoreMinister(minister);
+                  }}
+                >
+                  <RotateCcw size={13} />
+                  恢复
+                </span>
+              )}
             </button>
           );
         })}
@@ -316,9 +365,15 @@ export function MinisterCardList({
               transformOrigin: "bottom center",
               zIndex: Math.round(pct.py * 1000),
             } : { visibility: "hidden" }}
-            onMouseDown={(e) => onMouseDown(e, minister.name)}
+            onPointerDown={(e) => onCourtPointerDown(e, minister.name)}
+            onPointerMove={onCourtPointerMove}
+            onPointerUp={onCourtPointerEnd}
+            onPointerCancel={onCourtPointerEnd}
+            onLostPointerCapture={() => {
+              if (dragging.current) finishCourtDrag(didDrag.current);
+            }}
             onClick={(e) => {
-              if (didDrag.current) {
+              if (suppressNextClick.current || didDrag.current) {
                 e.preventDefault();
                 return;
               }
@@ -326,6 +381,7 @@ export function MinisterCardList({
                 if (selectable) onToggleSelect?.(minister);
                 return;
               }
+              if (minister.archived) return;
               onOpenChat(minister);
             }}
           >
@@ -349,6 +405,26 @@ export function MinisterCardList({
               <span className="minister-bio">{minister.summary}</span>
             </div>
             {minister.favorite && <Star className="favorite-mark" size={13} />}
+            {minister.archived && onRestoreMinister && (
+              <span
+                className="minister-restore-action"
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRestoreMinister(minister);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onRestoreMinister(minister);
+                }}
+              >
+                <RotateCcw size={13} />
+                恢复
+              </span>
+            )}
             {courtBubbles[minister.name] ? (
               <div className="court-speech-bubble" role="status">
                 <b>{minister.name}</b>
@@ -365,12 +441,14 @@ export function MinisterCardList({
 
 export function ArmyDrawer({
   armies,
+  armsStock,
   open,
   selectedArmyId,
   onSelectArmy,
   onClose,
 }: {
   armies: Army[];
+  armsStock?: ArmsStockItem[];
   open: boolean;
   selectedArmyId: string;
   onSelectArmy: (id: string) => void;
@@ -392,6 +470,18 @@ export function ArmyDrawer({
       <div className="right-drawer-search">
         <input className="right-drawer-search-input" placeholder="搜索番号/驻地/统帅…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
+      {armsStock && armsStock.some((w) => w.qty > 0) && (
+        <div className="arms-stock-panel">
+          <div className="arms-stock-title">军备总库</div>
+          <div className="arms-stock-list">
+            {armsStock.filter((w) => w.qty > 0).map((w) => (
+              <span key={w.id} className="arms-stock-chip" title={w.tier}>
+                {w.name}<b>{w.qty}</b>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="right-drawer-list">
         {filtered.map((army) => (
           <button
@@ -425,6 +515,11 @@ export function ArmyDrawer({
                 {selected.arrears > 0
                   ? `${selected.arrears}万两（≈${(selected.arrears / (selected.maintenance_per_turn || 1)).toFixed(1)}月）`
                   : "无欠饷"}
+              </td></tr>
+              <tr><th>持械</th><td colSpan={3}>
+                {selected.arms && selected.arms.length > 0
+                  ? selected.arms.map((w) => `${w.name}×${w.qty}`).join("、")
+                  : "无配发军械"}
               </td></tr>
               <tr><th>状态</th><td colSpan={3}>{selected.status}</td></tr>
             </tbody>
@@ -830,10 +925,17 @@ export function MinisterDetailDialog({
       .filter(([, value]) => value !== undefined && value !== null && value !== "")
       .map(([key, value]) => [key, formatFieldValue(key, value)])
     : [];
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
   const dialog = (
     <div className="minister-detail-layer" role="dialog" aria-modal="true" aria-label={`人物详情：${minister.name}`}>
       <div className="minister-detail-scrim" onClick={onClose} />
-      <section className="minister-detail-dialog">
+      <section className="minister-detail-dialog" onClick={(event) => event.stopPropagation()}>
         <header className="minister-detail-header">
           <div>
             <span className={`minister-status status-${minister.status}`}>{minister.status_label || minister.status}</span>
@@ -904,6 +1006,7 @@ export function CourtDrawer({
   onGroupChange,
   onClose,
   onOpenChat,
+  onRestoreMinister,
   onUploadPortrait,
   courtChatHistory,
   courtChatInput,
@@ -933,6 +1036,7 @@ export function CourtDrawer({
   onGroupChange: (group: string) => void;
   onClose: () => void;
   onOpenChat: (minister: Minister) => void;
+  onRestoreMinister?: (minister: Minister) => void;
   onUploadPortrait: (ministerName: string, file: File) => Promise<void>;
   courtChatHistory: CourtChatMessage[];
   courtChatInput: string;
@@ -1073,7 +1177,7 @@ export function CourtDrawer({
           <button className="icon-button" aria-label="收起" onClick={onClose}><X size={16} /></button>
         </div>
         <div className="segmented">
-          {["内阁+六部", "收藏", "在职", "全部"].map((group) => (
+          {["内阁+六部", "收藏", "在职", "全部", "已归档"].map((group) => (
             <button
               className={ministerGroup === group ? "active" : ""}
               key={group}
@@ -1121,6 +1225,7 @@ export function CourtDrawer({
           selectedMinister={selectedMinister}
           emptyNote={q ? "无匹配大臣。" : "此栏暂无可召见大臣。"}
           onOpenChat={onOpenChat}
+          onRestoreMinister={onRestoreMinister}
           courtMode={ministerGroup === "内阁+六部" || ministerGroup === "收藏"}
           onUploadPortrait={onUploadPortrait}
           courtBubbles={courtChatPanelOpen ? {} : courtChatBubbles}

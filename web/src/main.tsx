@@ -417,22 +417,19 @@ function App() {
     return powerId ? { ...node, power: powerById.get(powerId) } : node;
   });
   const selectedNode = mapNodes.find((node) => node.id === selectedNodeId) || mapNodes[0];
-  const ministers = filterMinisters(state.ministers, ministerGroup);
+  const rosterMinisters = [...(state.ministers || []), ...(state.archived_ministers || [])];
+  const ministers = filterMinisters(rosterMinisters, ministerGroup);
   const activeCourtMinisterNames = ministers.filter(canAttendCourtChat).map((m) => m.name);
   const effectiveCourtChatSelectedMinisters = courtChatSelectedMinisters.filter((name) => activeCourtMinisterNames.includes(name));
   const courtChatRosterSelection = effectiveCourtChatSelectedMinisters;
   const consorts = filterConsorts(state.consorts || [], haremGroup);
-  const allCharacters = [...state.ministers, ...(state.consorts || [])];
+  const allCharacters = [...rosterMinisters, ...(state.consorts || [])];
   const activeMinister = selectedMinister
     ? allCharacters.find((m) => m.name === selectedMinister) || temporaryActiveMinister
     : null;
   const mapIntelStyle = selectedNode ? getMapIntelStyle(selectedNode) : undefined;
 
   const openChat = (minister: Minister) => {
-    if (minister.status && minister.status !== "active") {
-      setError(`${minister.name}已${minister.status_label}${minister.status_reason ? "（" + minister.status_reason + "）" : ""}，无法召见。`);
-      return;
-    }
     const switchingMinister = selectedMinister !== minister.name;
     if (switchingMinister) {
       setChat([]);
@@ -458,6 +455,10 @@ function App() {
     if (busy) return;
     if (!activeMinister) return;
     const message = text.trim();
+    if (activeMinister.status === "dead" || activeMinister.status === "offstage") {
+      setComposerHint(`${activeMinister.name}${activeMinister.status_label || activeMinister.status}，不能继续召对。`);
+      return;
+    }
     if (!message) {
       setComposerHint("请先问话或点一个奏对题目");
       return;
@@ -708,6 +709,42 @@ function App() {
     try {
       await api<{ favorites: string[] }>(`/api/favorites/${encodeURIComponent(minister.name)}`, {
         method: minister.favorite ? "DELETE" : "POST",
+      });
+      await loadState();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const archiveMinister = async (minister: Minister) => {
+    if (minister.status === "active" || minister.origin !== "runtime") return;
+    if (!window.confirm(`归档「${minister.name}」？归档后此人保留数据库记录，但不再进入名册、召对候选和月末推演。`)) return;
+    setBusy("归档人物");
+    setError("");
+    try {
+      await api(`/api/ministers/${encodeURIComponent(minister.name)}/archive`, {
+        method: "POST",
+      });
+      setSelectedMinister("");
+      setTemporaryActiveMinister(null);
+      setActiveModal("none");
+      await loadState();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const restoreMinister = async (minister: Minister) => {
+    if (!minister.archived) return;
+    setBusy("恢复人物");
+    setError("");
+    try {
+      await api(`/api/ministers/${encodeURIComponent(minister.name)}/restore`, {
+        method: "POST",
       });
       await loadState();
     } catch (err) {
@@ -1116,6 +1153,7 @@ function App() {
         onGroupChange={setMinisterGroup}
         onClose={guardClose(() => setDrawerOpen(false))}
         onOpenChat={openChat}
+        onRestoreMinister={restoreMinister}
         onUploadPortrait={uploadPortrait}
         courtChatHistory={courtChatHistory}
         courtChatInput={courtChatInput}
@@ -1151,6 +1189,7 @@ function App() {
 
       <ArmyDrawer
         armies={state.armies}
+        armsStock={state.arms_stock}
         open={armyDrawerOpen}
         selectedArmyId={selectedArmyId}
         onSelectArmy={setSelectedArmyId}
@@ -1237,6 +1276,7 @@ function App() {
             onRejectDirective={rejectDirective}
             onUndoLast={undoLastChat}
             onOpenEdict={() => setActiveModal("edict")}
+            onArchive={() => archiveMinister(activeMinister)}
             onClose={guardClose(() => setActiveModal("none"))}
           />
         </FullscreenModal>

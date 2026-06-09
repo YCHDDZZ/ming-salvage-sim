@@ -504,7 +504,7 @@ def _apply_issue_technologies(
 def _apply_issue_fiscal(db: GameDB, state: GameState, ops: object, reason: str) -> None:
     """落地 issue effect 里的 fiscal 段：调税 issue 结案时真改 region.fiscal。
     op：{tax:田赋/辽饷/盐税/商税, ratio:倍率, region_id?:省id(空=全国), region_name?}。
-    田赋走 scale_tian_fu，辽饷/盐税/商税走 apply_dynamic_fiscal_scale；全国调同步改 fiscal_config base。
+    田赋走 scale_tian_fu，辽饷/盐税/商税走 apply_dynamic_fiscal_scale。
     这是户部 adjust_tax 立项的唯一落库点——issue 成功才改账，失败/搁浅不动税。
     """
     if not isinstance(ops, list):
@@ -529,13 +529,6 @@ def _apply_issue_fiscal(db: GameDB, state: GameState, ops: object, reason: str) 
                 touched = db.scale_tian_fu(ratio, region_id)
             else:
                 touched = db.apply_dynamic_fiscal_scale(tax, ratio, region_id)
-            # 全国一刀切才同步 fiscal_config base（单省覆盖不动全局目录，否则全国账误随单省漂）。
-            if not region_id:
-                cfg = db.get_fiscal_config()
-                base_key = f"{tax}_base"
-                cur = cfg.get(base_key)
-                if cur is not None:
-                    db.set_fiscal_config(base_key, max(0, round(int(cur) * ratio)))
             scope = op.get("region_name") or ("全国" if not region_id else region_id)
             print(f"[issue_fiscal] {scope}{tax}×{ratio} 落库（{touched}省）：{reason}")
         except Exception as exc:
@@ -1202,39 +1195,6 @@ def _apply_assignee_pct(base_delta: int, net_pct: int) -> int:
     return delta
 
 
-def _assignee_adjusted_issue_delta(db: GameDB, row: sqlite3.Row, base_delta: int) -> tuple[int, str]:
-    """把 extractor 输出视为基准增量，再按承办人属性做机械百分比折算。"""
-    assignee = str((row["assignee"] if "assignee" in row.keys() else "") or "").strip()
-    if not assignee or base_delta == 0:
-        return base_delta, ""
-    ch = db.conn.execute(
-        """
-        SELECT name, status, ability, loyalty, integrity, courage,
-               diplomacy, martial, stewardship, intrigue, learning
-        FROM characters WHERE name=?
-        """,
-        (assignee,),
-    ).fetchone()
-    if ch is None:
-        net_pct = -40
-        delta = _apply_assignee_pct(base_delta, net_pct)
-        return delta, f"承办人{assignee}不在名册，基准{base_delta}按承办修正{net_pct}%折算为{delta}。"
-    if str(ch["status"]) != "active":
-        net_pct = -50
-        delta = _apply_assignee_pct(base_delta, net_pct)
-        return delta, f"承办人{assignee}已非在朝，基准{base_delta}按承办修正{net_pct}%折算为{delta}。"
-    domain = _issue_domain(row)
-    net_pct = _assignee_net_pct(
-        int(ch["ability"] or 50),
-        int(ch["loyalty"] or 50),
-        int(ch["integrity"] or 50),
-        int(ch["courage"] or 50),
-        int(ch[domain] or 50),
-    )
-    delta = _apply_assignee_pct(base_delta, net_pct)
-    return delta, f"承办人{assignee}基准{base_delta}按承办修正{net_pct}%折算为{delta}。"
-
-
 def _auto_issue_delta_by_assignee(db: GameDB, row: sqlite3.Row) -> tuple[int, str]:
     """LLM 漏抽/填 0 时的兜底：基准进度按帝国修正同款百分比公式折算。"""
     assignee = str((row["assignee"] if "assignee" in row.keys() else "") or "").strip()
@@ -1356,13 +1316,13 @@ def apply_issue_tracker_output(
             budget_spent_actual = db.spend_issue_budget(state, issue_id, budget_spent)
         if base_delta_bar == 0:
             continue
-        delta_bar, assignee_note = _assignee_adjusted_issue_delta(db, issue_row, base_delta_bar)
-        delta_bar = max(-50, min(50, int(delta_bar)))
+        # 承办人影响已在推演侧（season_simulator 先叙事再定档）一次性计入档位，
+        # extractor 抽出的 delta_bar 即推演官按承办人专业能力+盘面推过的最终量；
+        # 这里不再叠第二道承办系数（否则档位区间被冲破，如 normal 落成 +11），只做 ±50 clamp。
+        delta_bar = max(-50, min(50, int(base_delta_bar)))
         inertia_delta = int(adv.get("inertia_delta") or 0)
         stage_text = str(adv.get("stage_text") or "")[:120]
         narrative = compact_log(adv.get("narrative") or "")
-        if assignee_note:
-            narrative = compact_log(f"{narrative}；{assignee_note}" if narrative else assignee_note)
         # 推进推到 100/0 即结案——extractor 在本条推进里同时现填终结效果（含 buildings/departments/
         # technologies 实体段）。issue 立项时自带 effect 的（预设部门/科技局势）用预设为底，现填覆盖；
         # 手动/自建局势立项时 effect 为空，实体全靠这里现填。推进与结案合一，无需 close_issues 再写一遍。
@@ -1671,6 +1631,16 @@ def apply_score_extraction(
     # 注：建筑的新建/变更/废止不走顶层字段，全由 issue 的 effect_on_resolve /
     #     effect_on_fail 里的 `buildings` 段在局势结案时落地（见 _apply_issue_buildings）。
 
+    # 4.5) arms_changes：军备总库叙事性增减（缴获/炸毁/采购）。建筑稳定月产由 flows 唯一变更，
+    #      extractor 不重复抽建筑产出；未列型号由 weapon_meta 动态归 tier 注册。
+    arms_changes_raw = extracted.get("arms_changes") or {}
+    arms_changes: List[Dict[str, object]] = []
+    if isinstance(arms_changes_raw, dict) and arms_changes_raw:
+        try:
+            arms_changes = db.apply_arms_stock_deltas(state, arms_changes_raw)
+        except Exception as exc:
+            print(f"[WARN] arms_changes 落库失败：{exc}")
+
     # 5) power_updates：非明势力三项简表（威望/实力/经济）落库
     power_updates_raw = extracted.get("power_updates") or {}
     power_changes: List[Dict[str, object]] = []
@@ -1689,8 +1659,8 @@ def apply_score_extraction(
         "cancels": extracted.get("cancels") or [],
     }, log_compactor=issue_log_compactor)
 
-    # 6.4) fiscal_removes：推演彻底裁撤月固定收支项（罢税/裁俸），优先级最高，先于 creates/changes。
-    #      含 dynamic（田赋/辽饷/盐税/商税/皇庄），后果玩家自负。删 base+rate 两行。
+    # 6.4) fiscal_removes：推演彻底裁撤 fiscal_config 中现存的月固定收支项，优先级最高。
+    #      田赋/辽饷/盐税/商税停征走 regions.fiscal 字段变化，不走删 base+rate。
     applied_fiscal_removes: List[Dict[str, object]] = []
     for remove in extracted.get("fiscal_removes") or []:
         key = str(remove.get("key") or "")
@@ -1999,6 +1969,7 @@ def apply_score_extraction(
         "region_changes": region_changes,
         "army_changes": army_changes,
         "created_armies": created_armies,
+        "arms_changes": arms_changes,
         "power_changes": power_changes,
         "issue_summary": issue_summary,
         "world_advance": extracted.get("world_advance") or {},

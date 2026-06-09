@@ -31,12 +31,11 @@ from ming_sim.db._helpers import (
 
 class _FiscalMixin:
     # dynamic 税科目 → regions.fiscal 子字段映射。dynamic 税实收走 calc_province_fiscal
-    # 读 region.fiscal（不读 fiscal_config 的 base），故对这些 key 做裁撤/调额必须同步改
-    # 各省 fiscal 字段才真生效——否则只动目录不动钱（账目与叙事脱节）。
+    # 读 region.fiscal（不读 fiscal_config 的 base），调额必须改各省 fiscal 字段才真生效。
     #   田赋＝regions.tax_per_turn（官民田×田赋亩率的月额），裁撤走 scale_tian_fu 缩放；
     #   皇庄收入＝各省 huang_tian×租率（flows 实算），调额改 huang_tian 或租率，不在本表。
     _DYNAMIC_REGION_FIELD = {
-        "辽饷": "liao_xiang", "盐税": "salt_tax", "商税": "commerce_tax",
+        "辽饷": "liao_xiang_li", "盐税": "salt_tax", "商税": "commerce_tax",
     }
 
     def init_fiscal_config(self) -> None:
@@ -161,6 +160,22 @@ class _FiscalMixin:
                     )
             _refresh_fiscal_metadata()
 
+        def _migrate_fiscal_v12_remove_obsolete_dynamic() -> None:
+            """v12：田赋/辽饷/盐税/商税改由省级 fiscal 字段表达，删除旧目录残留。"""
+            obsolete_keys = (
+                "田赋_rate",
+                "辽饷_base", "辽饷_rate",
+                "盐税_base", "盐税_rate",
+                "商税_base", "商税_rate",
+                "皇庄_base",
+            )
+            self.conn.execute(
+                f"DELETE FROM fiscal_config WHERE key IN ({','.join('?' for _ in obsolete_keys)})",
+                obsolete_keys,
+            )
+            _seed_missing()
+            _refresh_fiscal_metadata()
+
         # 每版迁移：从 N-1 → N，只动那版真正变的东西。键＝目标版本号 N。
         # 不在表里的版本步走默认 _seed_missing（只补缺 key）。将来要改某 key 默认 / 删某 key /
         # 加新 key，就在这里登记一条 lambda，只动那一项，别动其它——这样玩家改过的全保住。
@@ -169,6 +184,8 @@ class _FiscalMixin:
             7: _migrate_fiscal_v7_defaults,
             # v11：新增人口增长率系统的 6 个 _base 科目，默认迁移只补缺 key 即可。
             11: _seed_missing,
+            # v12：裁掉已转入 regions.fiscal/公式实算的旧 dynamic 目录键。
+            12: _migrate_fiscal_v12_remove_obsolete_dynamic,
             # 8: lambda: self._add_fiscal_key("关税_base", ...),   # 例：将来加新税
         }
 
@@ -296,7 +313,7 @@ class _FiscalMixin:
         return key
 
     def apply_dynamic_fiscal_scale(self, stem: str, ratio: float, region_id: str = "") -> int:
-        """按 ratio 缩放 regions.fiscal 中该 dynamic 税字段（辽饷/盐税/商税）。
+        """按 ratio 缩放 regions.fiscal 中该 dynamic 税字段（辽饷亩率/盐税月额/商税月额）。
 
         ratio=0 即彻底罢废（字段归零）；0<ratio<1 即按比例削减。田赋走 scale_tian_fu。
         region_id 为空＝全国所有省；填省 id＝仅该省定向调。
@@ -360,11 +377,9 @@ class _FiscalMixin:
     def remove_fiscal_item(self, key: str) -> Optional[str]:
         """彻底裁撤一个月固定收支项（罢税/裁俸）：删 base+rate 两行。
 
-        完全放开——含 dynamic（田赋/辽饷/盐税/商税/皇庄），后果玩家自负。
-        - fixed 项：删目录条目即停止逐月落账。
-        - dynamic 税（辽饷/盐税/商税）：实收走 region.fiscal，故同步把各省该字段归零；
-          田赋走 tax_per_turn 压到仅留三税基；皇庄收入读 fiscal_config，删 config 即停。
-          这样「永久罢辽饷」当真停收，不再只动目录不动钱。
+        只对 fiscal_config 中仍存在的月固定收支项生效；删目录条目即停止逐月落账。
+        v12 后田赋/辽饷/盐税/商税不再是 fiscal_config 科目，停征应改 regions.fiscal
+        的 tian_fu_li / liao_xiang_li / salt_tax / commerce_tax。
         删不存在的项返回 None。返回被删的 base key（按 stem 归一）。
         """
         stem = self._stem_of(key)
@@ -372,7 +387,7 @@ class _FiscalMixin:
             return None
         base_key = f"{stem}_base"
         rate_key = f"{stem}_rate"
-        # 存在性查 base 或 rate 任一——田赋只有 田赋_rate（无 base），但仍是可裁撤的 dynamic 项。
+        # 存在性查 base 或 rate 任一；v12 后田赋/三税通常已不在 fiscal_config。
         exists = self.conn.execute(
             "SELECT 1 FROM fiscal_config WHERE key IN (?, ?)", (base_key, rate_key)
         ).fetchone()
@@ -381,7 +396,7 @@ class _FiscalMixin:
         self.conn.execute(
             "DELETE FROM fiscal_config WHERE key IN (?, ?)", (base_key, rate_key)
         )
-        # dynamic 税：同步罢废各省实收字段（皇庄走 config 不在此）。
+        # 老档兼容：若 v12 前的 dynamic 税残留仍被删到，同步归零省级字段。
         if stem in self._DYNAMIC_REGION_FIELD:
             self.apply_dynamic_fiscal_scale(stem, 0.0)
         elif stem == "田赋":

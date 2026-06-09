@@ -5,7 +5,7 @@
     "tax_unit": "万两/月",
     "score_unit": "0-100",
     "note": "世界盘面：大明省份、边镇、外域、草原与藩属使用同一 regions 结构；controlled_by 表示当前控制势力。",
-    "fiscal_schema": "fiscal JSON列：huang_tian=皇庄万亩(两京)→内库, wang_tian=藩王庄田万亩(免税), guan_min_tian=官民田万亩→国库田赋, tian_fu_li=可选·本省田赋亩率毫/亩/年(覆盖fiscal_config全局250；江南可高/边地可低/0=罢征), grain_output=粮食年产万石(地力×在册亩), grain_stock=可调余粮万石(本省扣除民食后的官仓、常平仓、市场可采买余粮合计), liao_xiang=辽饷月摊万两, salt_tax=盐税月基数万两, commerce_tax=商税月基数万两, corruption=腐败度0-100。田赋=官民田×亩率/10000/12；田亩人口按史实7亿亩·1.5亿口"
+    "fiscal_schema": "fiscal JSON列：huang_tian=皇庄万亩(两京)→内库, wang_tian=藩王庄田万亩(免税), guan_min_tian=官民田万亩→国库田赋, tian_fu_li=可选·本省田赋亩率毫/亩/年(覆盖fiscal_config全局250；江南可高/边地可低/0=罢征), grain_output=粮食年产万石(地力×在册亩), grain_stock=可调余粮万石(本省扣除民食后的官仓、常平仓、市场可采买余粮合计), liao_xiang_li=辽饷亩率毫/亩/年, salt_tax=盐税月基数万两, commerce_tax=商税月基数万两, corruption=腐败度0-100。田赋=官民田×亩率/10000/12；田亩人口按史实7亿亩·1.5亿口"
   },
   "regions": [
     {
@@ -27,13 +27,13 @@
         "huang_tian": 1800,
         "wang_tian": 0,
         "guan_min_tian": 2400,
-        "liao_xiang": 3,
         "salt_tax": 5,
         "commerce_tax": 8,
         "corruption": 62,
         "grain_output": 3100,
         "tian_fu_li": 250,
-        "grain_stock": 2160
+        "grain_stock": 2160,
+        "liao_xiang_li": 150
       },
       "controlled_by": "ming"
     },
@@ -56,13 +56,13 @@
         "huang_tian": 700,
         "wang_tian": 0,
         "guan_min_tian": 9100,
-        "liao_xiang": 11,
         "salt_tax": 20,
         "commerce_tax": 15,
         "corruption": 44,
         "grain_output": 9310,
         "tian_fu_li": 340,
-        "grain_stock": 3950
+        "grain_stock": 3950,
+        "liao_xiang_li": 145
       },
       "controlled_by": "ming"
     },
@@ -85,13 +85,13 @@
         "huang_tian": 0,
         "wang_tian": 300,
         "guan_min_tian": 4900,
-        "liao_xiang": 6,
         "salt_tax": 8,
         "commerce_tax": 5,
         "corruption": 52,
         "grain_output": 3600,
         "tian_fu_li": 250,
-        "grain_stock": 1090
+        "grain_stock": 1090,
+        "liao_xiang_li": 147
       },
       "controlled_by": "ming"
     },
@@ -114,13 +114,13 @@
         "huang_tian": 0,
         "wang_tian": 600,
         "guan_min_tian": 3300,
-        "liao_xiang": 4,
         "salt_tax": 3,
         "commerce_tax": 4,
         "corruption": 58,
         "grain_output": 2600,
         "tian_fu_li": 210,
-        "grain_stock": 610
+        "grain_stock": 610,
+        "liao_xiang_li": 145
       },
       "controlled_by": "ming"
     },
@@ -143,13 +143,13 @@
         "huang_tian": 0,
         "wang_tian": 1200,
         "guan_min_tian": 3800,
-        "liao_xiang": 4,
         "salt_tax": 0,
         "commerce_tax": 3,
         "corruption": 55,
         "grain_output": 3300,
         "tian_fu_li": 240,
-        "grain_stock": 1010
+        "grain_stock": 1010,
+        "liao_xiang_li": 126
       },
       "controlled_by": "ming"
     },
@@ -172,13 +172,13 @@
         "huang_tian": 0,
         "wang_tian": 250,
         "guan_min_tian": 2850,
-        "liao_xiang": 3,
         "salt_tax": 0,
         "commerce_tax": 2,
         "corruption": 72,
         "grain_output": 2205,
         "tian_fu_li": 170,
-        "grain_stock": 170
+        "grain_stock": 170,
+        "liao_xiang_li": 126
       },
       "controlled_by": "ming"
     },
@@ -201,13 +201,13 @@
         "huang_tian": 0,
         "wang_tian": 150,
         "guan_min_tian": 5950,
-        "liao_xiang": 7,
         "salt_tax": 15,
         "commerce_tax": 8,
         "corruption": 38,
         "grain_output": 6100,
         "tian_fu_li": 330,
-        "grain_stock": 2790
+        "grain_stock": 2790,
+        "liao_xiang_li": 141
       },
       "controlled_by": "ming"
     },
@@ -230,13 +230,13 @@
         "huang_tian": 0,
         "wang_tian": 400,
         "guan_min_tian": 4900,
-        "liao_xiang": 6,
         "salt_tax": 5,
         "commerce_tax": 5,
         "corruption": 48,
         "grain_output": 4770,
         "tian_fu_li": 280,
-        "grain_stock": 1920
+        "grain_stock": 1920,
+        "liao_xiang_li": 147
       },
       "controlled_by": "ming"
     },
@@ -259,13 +259,13 @@
         "huang_tian": 0,
         "wang_tian": 950,
         "guan_min_tian": 6650,
-        "liao_xiang": 8,
         "salt_tax": 0,
         "commerce_tax": 4,
         "corruption": 50,
         "grain_output": 6992,
         "tian_fu_li": 260,
-        "grain_stock": 3920
+        "grain_stock": 3920,
+        "liao_xiang_li": 144
       },
       "controlled_by": "ming"
     },
@@ -288,13 +288,13 @@
         "huang_tian": 0,
         "wang_tian": 450,
         "guan_min_tian": 4150,
-        "liao_xiang": 5,
         "salt_tax": 0,
         "commerce_tax": 3,
         "corruption": 60,
         "grain_output": 3588,
         "tian_fu_li": 220,
-        "grain_stock": 1650
+        "grain_stock": 1650,
+        "liao_xiang_li": 145
       },
       "controlled_by": "ming"
     },
@@ -317,13 +317,13 @@
         "huang_tian": 0,
         "wang_tian": 100,
         "guan_min_tian": 3500,
-        "liao_xiang": 4,
         "salt_tax": 8,
         "commerce_tax": 6,
         "corruption": 45,
         "grain_output": 3060,
         "tian_fu_li": 280,
-        "grain_stock": 810
+        "grain_stock": 810,
+        "liao_xiang_li": 137
       },
       "controlled_by": "ming"
     },
@@ -346,13 +346,13 @@
         "huang_tian": 0,
         "wang_tian": 150,
         "guan_min_tian": 4050,
-        "liao_xiang": 5,
         "salt_tax": 10,
         "commerce_tax": 8,
         "corruption": 55,
         "grain_output": 3444,
         "tian_fu_li": 270,
-        "grain_stock": 1360
+        "grain_stock": 1360,
+        "liao_xiang_li": 148
       },
       "controlled_by": "ming"
     },
@@ -375,13 +375,13 @@
         "huang_tian": 0,
         "wang_tian": 80,
         "guan_min_tian": 2320,
-        "liao_xiang": 3,
         "salt_tax": 0,
         "commerce_tax": 1,
         "corruption": 65,
         "grain_output": 1530,
         "tian_fu_li": 190,
-        "grain_stock": 360
+        "grain_stock": 360,
+        "liao_xiang_li": 155
       },
       "controlled_by": "ming"
     },
@@ -404,13 +404,13 @@
         "huang_tian": 0,
         "wang_tian": 50,
         "guan_min_tian": 2550,
-        "liao_xiang": 3,
         "salt_tax": 0,
         "commerce_tax": 2,
         "corruption": 68,
         "grain_output": 1660,
         "tian_fu_li": 180,
-        "grain_stock": 520
+        "grain_stock": 520,
+        "liao_xiang_li": 141
       },
       "controlled_by": "ming"
     },
@@ -433,13 +433,13 @@
         "huang_tian": 0,
         "wang_tian": 30,
         "guan_min_tian": 2070,
-        "liao_xiang": 2,
         "salt_tax": 0,
         "commerce_tax": 1,
         "corruption": 70,
         "grain_output": 1275,
         "tian_fu_li": 170,
-        "grain_stock": 200
+        "grain_stock": 200,
+        "liao_xiang_li": 116
       },
       "controlled_by": "ming"
     },
@@ -462,13 +462,13 @@
         "huang_tian": 0,
         "wang_tian": 0,
         "guan_min_tian": 550,
-        "liao_xiang": 1,
         "salt_tax": 0,
         "commerce_tax": 0,
         "corruption": 50,
         "grain_output": 405,
         "tian_fu_li": 150,
-        "grain_stock": 30
+        "grain_stock": 30,
+        "liao_xiang_li": 218
       },
       "controlled_by": "ming"
     },
@@ -491,13 +491,13 @@
         "huang_tian": 0,
         "wang_tian": 0,
         "guan_min_tian": 50,
-        "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 0,
         "corruption": 62,
         "grain_output": 75,
         "tian_fu_li": 150,
-        "grain_stock": 6
+        "grain_stock": 6,
+        "liao_xiang_li": 0
       },
       "controlled_by": "ming"
     },
@@ -520,12 +520,12 @@
         "huang_tian": 0,
         "wang_tian": 0,
         "guan_min_tian": 650,
-        "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 0,
         "corruption": 35,
         "grain_output": 520,
-        "grain_stock": 120
+        "grain_stock": 120,
+        "liao_xiang_li": 0
       },
       "controlled_by": "houjin",
       "on_restore": {
@@ -546,12 +546,12 @@
           "huang_tian": 0,
           "wang_tian": 0,
           "guan_min_tian": 30,
-          "liao_xiang": 0,
           "salt_tax": 0,
           "commerce_tax": 0,
           "corruption": 35,
           "grain_output": 270,
-          "grain_stock": 80
+          "grain_stock": 80,
+          "liao_xiang_li": 0
         }
       }
     },
@@ -574,12 +574,12 @@
         "huang_tian": 0,
         "wang_tian": 0,
         "guan_min_tian": 900,
-        "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 1,
         "corruption": 42,
         "grain_output": 760,
-        "grain_stock": 150
+        "grain_stock": 150,
+        "liao_xiang_li": 0
       },
       "controlled_by": "houjin",
       "on_restore": {
@@ -600,12 +600,12 @@
           "huang_tian": 0,
           "wang_tian": 0,
           "guan_min_tian": 180,
-          "liao_xiang": 6,
           "salt_tax": 0,
           "commerce_tax": 4,
           "corruption": 40,
           "grain_output": 520,
-          "grain_stock": 240
+          "grain_stock": 240,
+          "liao_xiang_li": 4000
         }
       }
     },
@@ -628,12 +628,12 @@
         "huang_tian": 0,
         "wang_tian": 0,
         "guan_min_tian": 120,
-        "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 1,
         "corruption": 38,
         "grain_output": 390,
-        "grain_stock": 60
+        "grain_stock": 60,
+        "liao_xiang_li": 0
       },
       "controlled_by": "mongol",
       "on_restore": {
@@ -654,12 +654,12 @@
           "huang_tian": 0,
           "wang_tian": 0,
           "guan_min_tian": 80,
-          "liao_xiang": 0,
           "salt_tax": 0,
           "commerce_tax": 3,
           "corruption": 30,
           "grain_output": 290,
-          "grain_stock": 80
+          "grain_stock": 80,
+          "liao_xiang_li": 0
         }
       }
     },
@@ -682,12 +682,12 @@
         "huang_tian": 0,
         "wang_tian": 0,
         "guan_min_tian": 3600,
-        "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 1,
         "corruption": 45,
         "grain_output": 2600,
-        "grain_stock": 690
+        "grain_stock": 690,
+        "liao_xiang_li": 0
       },
       "controlled_by": "korea",
       "on_restore": {
@@ -708,12 +708,12 @@
           "huang_tian": 0,
           "wang_tian": 0,
           "guan_min_tian": 80,
-          "liao_xiang": 0,
           "salt_tax": 0,
           "commerce_tax": 2,
           "corruption": 50,
           "grain_output": 1800,
-          "grain_stock": 500
+          "grain_stock": 500,
+          "liao_xiang_li": 0
         }
       }
     },
@@ -736,12 +736,12 @@
         "huang_tian": 0,
         "wang_tian": 0,
         "guan_min_tian": 50,
-        "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 0,
         "corruption": 35,
         "grain_output": 190,
-        "grain_stock": 30
+        "grain_stock": 30,
+        "liao_xiang_li": 0
       },
       "controlled_by": "houjin",
       "on_restore": {
@@ -762,12 +762,12 @@
           "huang_tian": 0,
           "wang_tian": 0,
           "guan_min_tian": 5,
-          "liao_xiang": 0,
           "salt_tax": 0,
           "commerce_tax": 0,
           "corruption": 30,
           "grain_output": 135,
-          "grain_stock": 40
+          "grain_stock": 40,
+          "liao_xiang_li": 0
         }
       }
     },
@@ -790,12 +790,12 @@
         "huang_tian": 0,
         "wang_tian": 0,
         "guan_min_tian": 80,
-        "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 1,
         "corruption": 25,
         "grain_output": 285,
-        "grain_stock": 45
+        "grain_stock": 45,
+        "liao_xiang_li": 0
       },
       "controlled_by": "mongol"
     },
@@ -818,12 +818,12 @@
         "huang_tian": 0,
         "wang_tian": 0,
         "guan_min_tian": 280,
-        "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 1,
         "corruption": 20,
         "grain_output": 250,
-        "grain_stock": 55
+        "grain_stock": 55,
+        "liao_xiang_li": 0
       },
       "controlled_by": "mongol"
     },
@@ -846,12 +846,12 @@
         "huang_tian": 0,
         "wang_tian": 0,
         "guan_min_tian": 360,
-        "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 1,
         "corruption": 22,
         "grain_output": 310,
-        "grain_stock": 65
+        "grain_stock": 65,
+        "liao_xiang_li": 0
       },
       "controlled_by": "tibet"
     },
@@ -874,12 +874,12 @@
         "huang_tian": 0,
         "wang_tian": 0,
         "guan_min_tian": 30,
-        "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 0,
         "corruption": 25,
         "grain_output": 120,
-        "grain_stock": 28
+        "grain_stock": 28,
+        "liao_xiang_li": 0
       },
       "controlled_by": "houjin"
     },
@@ -902,12 +902,12 @@
         "huang_tian": 0,
         "wang_tian": 0,
         "guan_min_tian": 7600,
-        "liao_xiang": 0,
         "salt_tax": 2,
         "commerce_tax": 8,
         "corruption": 18,
         "grain_output": 6500,
-        "grain_stock": 850
+        "grain_stock": 850,
+        "liao_xiang_li": 0
       },
       "controlled_by": "japan"
     },
@@ -930,12 +930,12 @@
         "huang_tian": 0,
         "wang_tian": 0,
         "guan_min_tian": 3600,
-        "liao_xiang": 0,
         "salt_tax": 1,
         "commerce_tax": 3,
         "corruption": 30,
         "grain_output": 2600,
-        "grain_stock": 420
+        "grain_stock": 420,
+        "liao_xiang_li": 0
       },
       "controlled_by": "annam"
     },
@@ -958,12 +958,12 @@
         "huang_tian": 0,
         "wang_tian": 0,
         "guan_min_tian": 80,
-        "liao_xiang": 0,
         "salt_tax": 0,
         "commerce_tax": 1,
         "corruption": 0,
         "grain_output": 90,
-        "grain_stock": 40
+        "grain_stock": 40,
+        "liao_xiang_li": 0
       },
       "controlled_by": "dutch",
       "on_restore": {
@@ -984,12 +984,12 @@
           "huang_tian": 0,
           "wang_tian": 0,
           "guan_min_tian": 35,
-          "liao_xiang": 0,
           "salt_tax": 2,
           "commerce_tax": 4,
           "corruption": 30,
           "grain_output": 100,
-          "grain_stock": 60
+          "grain_stock": 60,
+          "liao_xiang_li": 0
         }
       }
     }

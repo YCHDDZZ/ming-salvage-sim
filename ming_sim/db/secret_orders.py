@@ -33,6 +33,29 @@ from ming_sim.db._helpers import (
 class _SecretOrdersMixin:
     # ----- secret_orders（密令系统）-----
 
+    def _validate_secret_order_assignee(self, minister_name: str) -> None:
+        name = (minister_name or "").strip()
+        if not name:
+            raise ValueError("密令承办人不能为空。")
+        row = self.conn.execute(
+            "SELECT name, office, office_type, status, status_reason, power_id FROM characters WHERE name = ?",
+            (name,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"密令承办人「{name}」未入朝廷人物名册，请先召见或登记此人。")
+        if (row["power_id"] or "ming") != "ming":
+            raise ValueError(f"密令承办人「{name}」不属大明朝廷，不能承办密令。")
+        status = row["status"] or "active"
+        if status != "active":
+            reason = row["status_reason"] or ""
+            raise ValueError(f"密令承办人「{name}」当前状态为 {status}，不能承办密令。{reason}".strip())
+        office_type = (row["office_type"] or "").strip()
+        office = (row["office"] or "").strip()
+        if office_type == "后宫":
+            raise ValueError(f"密令承办人「{name}」为后宫人物，不能承办朝廷密令。")
+        if office_type == "candidate" or not office:
+            raise ValueError(f"密令承办人「{name}」尚无可任事官职，不能承办密令。")
+
     @staticmethod
     def _compact_secret_order_lines(text: object, max_chars: int = 80) -> List[Dict[str, object]]:
         """把 result/sim_note 的按月长文本压成给推演看的短时间线。"""
@@ -73,6 +96,8 @@ class _SecretOrdersMixin:
         importance: int = 4,
         deadline_months: int = 0,
     ) -> int:
+        minister_name = (minister_name or "").strip()
+        self._validate_secret_order_assignee(minister_name)
         game_settings = load_runtime_game()
         total_limit = max(1, int(game_settings.get("secret_order_total_limit", 5) or 5))
         person_limit = max(1, int(game_settings.get("secret_order_person_limit", 1) or 1))
