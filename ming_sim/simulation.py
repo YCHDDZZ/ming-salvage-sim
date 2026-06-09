@@ -465,6 +465,8 @@ def build_simulator_payload(
         "victory_status": victory_status(db, state),
         "regions": _auto_table(region_rows),
         "armies": _auto_table(army_rows),
+        # 每军实际持有军械件数 {军名:{武器名:件数}}——AI 据此判「够装备多少人升级」（兵种升级须有对应实物装备）。
+        "army_held_arms": db.army_held_arms_all(),
         "buildings": _building_prompt_table(db),
         "departments": _auto_table(db.department_payload()),
         "technologies": _technology_prompt_table(db),
@@ -708,7 +710,7 @@ def _extractor_compat_payload(base: Dict[str, object]) -> Dict[str, object]:
 # 重复，从补充上下文里剔除，省掉约一半 extractor system 体积。
 _MODULE_DROP_FIELDS = (
     # 同名同格式，simulator_payload 已全量给出
-    "regions", "armies", "buildings", "departments", "technologies", "preset_catalog", "current_state",
+    "regions", "armies", "army_held_arms", "buildings", "departments", "technologies", "preset_catalog", "current_state",
     "active_issues", "candidate_events", "decree_text",
     "relevant_memories", "secret_orders",
     # 异名但同源：simulator_payload 已有等价视图，extractor prompt（score_extractor_shared.md:17、

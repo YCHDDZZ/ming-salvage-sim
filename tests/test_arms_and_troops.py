@@ -48,6 +48,16 @@ class ArmsAndTroopsTests(unittest.TestCase):
         self.assertEqual(army["manpower"], sum(army["troop_composition"].values()))
         self.assertEqual(army["maintenance_per_turn"], self.content.troop_maintenance_total(army["troop_composition"]))
 
+    def test_army_held_arms_feeds_payload(self):
+        # 拨发军械后，每军持械量进 army_held_arms（AI 据此判升级规模）；未拨发的军不出现。
+        self.assertEqual(self.db.army_held_arms_all(), {})  # 开局各军无入库持械
+        self.db.apply_arms_dispatch(self.state, "jingying", "火铳", 1200, "测试拨发")
+        held = self.db.army_held_arms_all()
+        self.assertIn("京营", held)
+        self.assertEqual(held["京营"]["火铳"], 1200)
+        # 其余军未拨发 → 不在表里
+        self.assertNotIn("关宁军 / 宁锦防线", held)
+
 
 class TroopRateAndCanonTests(unittest.TestCase):
     def setUp(self):

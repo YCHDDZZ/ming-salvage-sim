@@ -262,3 +262,21 @@ class _ArmsMixin:
         ).fetchall()
         return [{"id": r["weapon_id"], "name": r["name"], "tier": r["tier"], "qty": int(r["qty"])}
                 for r in rows]
+
+    def army_held_arms_all(self) -> Dict[str, Dict[str, int]]:
+        """所有在役军队的持械量 {军名: {武器名: 件数}}。供 simulator/extractor payload——
+        AI 据此判「该军有多少枪炮、够装备多少人升级」。只列 qty>0 的型号；无持械的军不出现。"""
+        rows = self.conn.execute(
+            """
+            SELECT a.name AS army_name, w.name AS weapon_name, aa.qty
+            FROM army_arms aa
+            JOIN armies a ON a.id = aa.army_id
+            JOIN weapons w ON w.id = aa.weapon_id
+            WHERE aa.qty > 0 AND a.active = 1
+            ORDER BY a.id, w.tier, w.name
+            """
+        ).fetchall()
+        out: Dict[str, Dict[str, int]] = {}
+        for r in rows:
+            out.setdefault(str(r["army_name"]), {})[str(r["weapon_name"])] = int(r["qty"])
+        return out

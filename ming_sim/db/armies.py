@@ -60,7 +60,11 @@ class _ArmiesMixin:
         """对已归一的 composition 做科技门控：预设兵种未解锁（troop_unlocked=False）的，
         兵力并入 default_tier（不断游戏）。runtime/AI 新兵种 troop_unlocked 默认放行，原样保留。
         体现「预设超前兵种须先研成对应科技才能编」。
-        返回 (门控后 composition, 人话说明清单)——说明会透出到回合明细，让玩家知道程序代为降级了。"""
+
+        装备维度不在此门控——「升级须有对应实物装备、按持械量定升级人数」由 AI（simulator/extractor）
+        软判（提示词讲规则+例子，payload 喂 held_arms），程序只信任 AI 输出的 composition。
+
+        返回 (门控后 composition, 人话说明清单)——说明透出到回合明细，让玩家知道程序代为降级了。"""
         default_tier = str(self.content.troop_cost.get("default_tier") or "非正规步兵")
         gated: Dict[str, int] = {}
         notes: List[str] = []
@@ -79,7 +83,7 @@ class _ArmiesMixin:
         return gated, notes
 
     def _troop_required_tech(self, tier_name: str) -> str:
-        """该兵种的前置科技名（未注册/无门槛→空串）。供门控说明用。"""
+        """该兵种的前置科技名（未注册/无门槛→空串）。供门控判定与说明用。"""
         row = self.conn.execute(
             "SELECT requires_tech FROM troop_tiers WHERE name=?", (str(tier_name or ""),)).fetchone()
         return str(row["requires_tech"] or "").strip() if row else ""

@@ -538,6 +538,7 @@ def load_troop_cost() -> "Dict[str, object]":
             "per_kilo": per_kilo,
             "keywords": keywords,
             "requires_tech": str(item.get("requires_tech") or ""),
+            "equipment": list(item.get("equipment") or []),
             "category": str(item.get("category") or ""),
             "upgrades": list(item.get("upgrades") or []),
         })

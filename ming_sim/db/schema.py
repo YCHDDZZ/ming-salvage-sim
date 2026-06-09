@@ -293,7 +293,8 @@ class _SchemaMixin:
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
 
-            -- 兵种档注册表（troop_cost.json 打底 + 运行时 LLM 新增）：requires_tech 门控编制
+            -- 兵种档注册表（troop_cost.json 打底 + 运行时 LLM 新增）：requires_tech 门控编制（须研成科技）。
+            -- 装备维度（升级须有对应实物装备、按持械量定升级人数）由 AI 软判，不在此表门控。
             CREATE TABLE IF NOT EXISTS troop_tiers (
                 name TEXT PRIMARY KEY,
                 category TEXT NOT NULL DEFAULT '',

@@ -1,6 +1,6 @@
 {
-  "version": 4,
-  "note": "兵种/军需表：troop_composition 的 key 必须是本表 tier 名（固定兵种闭集）。per_kilo=月饷单价（万两/千人/月），程序按 tier 名精确查表算军费。requires_tech=前置科技中文名（须在 technologies 表已解锁才可编该兵种，空=开局可用）；超前兵种挂的科技名未必在预设池，须等推演现场研成同名科技。category/upgrades=分类与升级线（透出供推演参考，升级机制后续实现）。",
+  "version": 5,
+  "note": "兵种/军需表：troop_composition 的 key 必须是本表 tier 名（固定兵种闭集）。per_kilo=月饷单价（万两/千人/月），程序按 tier 名精确查表算军费。requires_tech=前置科技中文名（须在 technologies 表已解锁才可编该兵种，空=开局可用）；超前兵种挂的科技名未必在预设池，须等推演现场研成同名科技。equipment=该 tier 依赖的装备类别（人读注释，供参考）。category/upgrades=分类与升级线（透出供推演参考）。升级须有对应实物装备、按持械量定升级人数＝由 AI 据 payload 的 held_arms 软判，程序不门控装备。",
   "unit": "万两/千人/月",
   "tiers": [
     {
