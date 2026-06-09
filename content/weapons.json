@@ -1,10 +1,9 @@
 {
   "version": 2,
-  "note": "军事装备型号表。建筑按 output_metric=武器id 月产入总库；皇帝下旨拨发给某军提 equipment。requires_tech＝前置科技中文名（须在 technologies 表已结案解锁才可产/造，空＝无门槛）。LLM 推演新出未列型号→按 tier 关键词归档、给默认属性动态注册。equip_per_unit＝拨发 1 件给某军提升的 equipment 分基数（再按军规模折算、钳 0-100）。cost＝每件造价/采购万两（采购外购扣账用；建筑产出免费，料钱已含在建筑维护费）。power＝战力权重。",
+  "note": "军事装备型号表。建筑按 output_metric=武器id 月产入总库；皇帝下旨拨发给某军提 equipment。requires_tech＝前置科技中文名（须在 technologies 表已结案解锁才可产/造，空＝无门槛）。LLM 推演新出未列型号→按 tier 关键词归档、给默认属性动态注册。equip_per_unit＝拨发 1 件给某军提升的 equipment 分基数（再按军规模折算、钳 0-100）。cost＝每件造价/采购万两（采购外购扣账用；建筑产出免费，料钱已含在建筑维护费）。",
   "default_tier": "轻火器",
   "tiers": {
     "轻火器": {
-      "power": 1,
       "cost": 1,
       "equip_per_unit": 0.4,
       "keywords": [
@@ -16,7 +15,6 @@
       ]
     },
     "火炮": {
-      "power": 3,
       "cost": 4,
       "equip_per_unit": 2.0,
       "keywords": [
@@ -27,7 +25,6 @@
       ]
     },
     "重炮": {
-      "power": 6,
       "cost": 12,
       "equip_per_unit": 4.0,
       "keywords": [
@@ -42,7 +39,6 @@
       "id": "huochong",
       "name": "火铳",
       "tier": "轻火器",
-      "power": 1,
       "cost": 1,
       "equip_per_unit": 0.4,
       "requires_tech": "",
@@ -52,7 +48,6 @@
       "id": "niaochong",
       "name": "鸟铳",
       "tier": "轻火器",
-      "power": 1,
       "cost": 1,
       "equip_per_unit": 0.5,
       "requires_tech": "",
@@ -62,7 +57,6 @@
       "id": "sanyan_chong",
       "name": "三眼铳",
       "tier": "轻火器",
-      "power": 1,
       "cost": 1,
       "equip_per_unit": 0.4,
       "requires_tech": "",
@@ -72,7 +66,6 @@
       "id": "suifa_qiang",
       "name": "燧发枪",
       "tier": "轻火器",
-      "power": 2,
       "cost": 3,
       "equip_per_unit": 1.0,
       "requires_tech": "火器新法",
@@ -82,7 +75,6 @@
       "id": "taiqiang",
       "name": "抬枪",
       "tier": "轻火器",
-      "power": 2,
       "cost": 2,
       "equip_per_unit": 0.8,
       "requires_tech": "火器新法",
@@ -92,7 +84,6 @@
       "id": "hudun_pao",
       "name": "虎蹲炮",
       "tier": "火炮",
-      "power": 2,
       "cost": 3,
       "equip_per_unit": 1.5,
       "requires_tech": "",
@@ -102,7 +93,6 @@
       "id": "folangji",
       "name": "佛郎机",
       "tier": "火炮",
-      "power": 3,
       "cost": 4,
       "equip_per_unit": 2.0,
       "requires_tech": "",
@@ -112,7 +102,6 @@
       "id": "huopao",
       "name": "火炮",
       "tier": "火炮",
-      "power": 4,
       "cost": 5,
       "equip_per_unit": 2.5,
       "requires_tech": "矿冶炼法",
@@ -122,7 +111,6 @@
       "id": "zimu_pao",
       "name": "子母炮",
       "tier": "火炮",
-      "power": 4,
       "cost": 6,
       "equip_per_unit": 2.5,
       "requires_tech": "火器新法",
@@ -132,7 +120,6 @@
       "id": "hongyi_pao",
       "name": "红夷大炮",
       "tier": "重炮",
-      "power": 6,
       "cost": 12,
       "equip_per_unit": 4.0,
       "requires_tech": "矿冶炼法",

@@ -3,7 +3,7 @@
     "manpower_unit": "人",
     "maintenance_unit": "万两/月",
     "score_unit": "0-100（arrears 例外，单位为累计欠饷万两、整数、无上限）",
-    "note": "MVP 军队盘面为历史近似，不追求完整编制；核心服务于问话、调度、拨饷和月末结算。maintenance_per_turn 为月值，全国合计约65万/月，年约780万，贴近崇祯实际军费需求。arrears 字段=累计欠饷万两，flows 月末按差额累加。"
+    "note": "开局可用兵种：非正规步兵（卫所兵/募兵/边军/土兵/流民兵）、火炮队（火器营/炮兵/佛郎机炮手）、骑兵（边镇/关宁/蒙古/八旗骑兵）、桨帆舰队（水师/炮船/海防船）。后续按 Victoria 3 式兵种升级线解锁。"
   },
   "armies": [
     {
@@ -13,7 +13,7 @@
       "theater": "京畿",
       "commander": "京营诸将",
       "controller": "兵部",
-      "troop_type": "步卒、火器炮兵、骑兵",
+      "troop_type": "非正规步兵、火炮队、骑兵",
       "manpower": 85000,
       "maintenance_per_turn": 8,
       "supply": 55,
@@ -26,8 +26,8 @@
       "status": "拱卫京师但空额、克扣和操练废弛严重。",
       "owner_power": "ming",
       "troop_composition": {
-        "步卒": 75000,
-        "火器炮兵": 5000,
+        "非正规步兵": 75000,
+        "火炮队": 5000,
         "骑兵": 5000
       }
     },
@@ -38,9 +38,9 @@
       "theater": "辽东",
       "commander": "袁崇焕",
       "controller": "袁崇焕",
-      "troop_type": "边军、骑兵、火器炮兵",
+      "troop_type": "非正规步兵、骑兵、火炮队",
       "manpower": 72000,
-      "maintenance_per_turn": 10,
+      "maintenance_per_turn": 9,
       "supply": 38,
       "morale": 52,
       "training": 68,
@@ -51,9 +51,9 @@
       "status": "宁锦守线尚可，欠饷严重，主动大举出击风险极高。",
       "owner_power": "ming",
       "troop_composition": {
-        "边军": 42000,
+        "非正规步兵": 42000,
         "骑兵": 18000,
-        "火器炮兵": 12000
+        "火炮队": 12000
       }
     },
     {
@@ -63,7 +63,7 @@
       "theater": "辽东门户",
       "commander": "山海关总兵",
       "controller": "兵部",
-      "troop_type": "关隘守军、火器炮兵、步卒",
+      "troop_type": "非正规步兵、火炮队",
       "manpower": 28000,
       "maintenance_per_turn": 3,
       "supply": 56,
@@ -76,9 +76,8 @@
       "status": "京师门户，守强攻弱，需与宁锦军饷联动。",
       "owner_power": "ming",
       "troop_composition": {
-        "关隘守军": 18000,
-        "火器炮兵": 4000,
-        "步卒": 6000
+        "非正规步兵": 24000,
+        "火炮队": 4000
       }
     },
     {
@@ -88,9 +87,9 @@
       "theater": "北边",
       "commander": "宣大总督",
       "controller": "兵部",
-      "troop_type": "边军、骑兵、步卒",
+      "troop_type": "非正规步兵、骑兵",
       "manpower": 65000,
-      "maintenance_per_turn": 8,
+      "maintenance_per_turn": 6,
       "supply": 42,
       "morale": 48,
       "training": 55,
@@ -101,9 +100,8 @@
       "status": "边饷紧、旱灾重，防蒙古与后金绕袭压力并存。",
       "owner_power": "ming",
       "troop_composition": {
-        "边军": 40000,
-        "骑兵": 15000,
-        "步卒": 10000
+        "非正规步兵": 50000,
+        "骑兵": 15000
       }
     },
     {
@@ -113,9 +111,9 @@
       "theater": "京畿屏障",
       "commander": "蓟镇总兵",
       "controller": "兵部",
-      "troop_type": "边军、骑兵、步卒",
+      "troop_type": "非正规步兵、骑兵",
       "manpower": 52000,
-      "maintenance_per_turn": 6,
+      "maintenance_per_turn": 5,
       "supply": 46,
       "morale": 47,
       "training": 52,
@@ -126,9 +124,8 @@
       "status": "京师屏障，欠饷和军纪问题会直接牵动京畿。",
       "owner_power": "ming",
       "troop_composition": {
-        "边军": 33000,
-        "骑兵": 11000,
-        "步卒": 8000
+        "非正规步兵": 41000,
+        "骑兵": 11000
       }
     },
     {
@@ -138,9 +135,9 @@
       "theater": "海防辽援",
       "commander": "登莱巡抚",
       "controller": "兵部",
-      "troop_type": "水师、火器炮兵、步卒",
+      "troop_type": "桨帆舰队、火炮队、非正规步兵",
       "manpower": 26000,
-      "maintenance_per_turn": 3,
+      "maintenance_per_turn": 4,
       "supply": 50,
       "morale": 50,
       "training": 54,
@@ -151,9 +148,9 @@
       "status": "可支援辽东和海运，但虚实难辨，兵变风险需防。",
       "owner_power": "ming",
       "troop_composition": {
-        "水师": 12000,
-        "火器炮兵": 5000,
-        "步卒": 9000
+        "桨帆舰队": 12000,
+        "火炮队": 5000,
+        "非正规步兵": 9000
       }
     },
     {
@@ -163,9 +160,9 @@
       "theater": "辽东侧翼",
       "commander": "毛文龙旧部",
       "controller": "边镇",
-      "troop_type": "水师、岛兵、游击兵",
+      "troop_type": "桨帆舰队、非正规步兵",
       "manpower": 30000,
-      "maintenance_per_turn": 4,
+      "maintenance_per_turn": 5,
       "supply": 32,
       "morale": 58,
       "training": 50,
@@ -176,9 +173,8 @@
       "status": "牵制后金有用，但自主性强、报功报饷虚实难辨。",
       "owner_power": "ming",
       "troop_composition": {
-        "水师": 10000,
-        "岛兵": 12000,
-        "游击兵": 8000
+        "桨帆舰队": 22000,
+        "非正规步兵": 8000
       }
     },
     {
@@ -188,9 +184,9 @@
       "theater": "西北",
       "commander": "陕西巡抚与边将",
       "controller": "兵部",
-      "troop_type": "边军、步卒、骑兵",
+      "troop_type": "非正规步兵、骑兵",
       "manpower": 42000,
-      "maintenance_per_turn": 5,
+      "maintenance_per_turn": 4,
       "supply": 28,
       "morale": 36,
       "training": 45,
@@ -201,8 +197,7 @@
       "status": "饥荒、裁驿和欠饷交叠，易与地方民变互相点燃。",
       "owner_power": "ming",
       "troop_composition": {
-        "边军": 22000,
-        "步卒": 14000,
+        "非正规步兵": 36000,
         "骑兵": 6000
       }
     },
@@ -213,7 +208,7 @@
       "theater": "江南",
       "commander": "南京守备",
       "controller": "南京兵部",
-      "troop_type": "步卒、操江水兵、卫所兵",
+      "troop_type": "非正规步兵、桨帆舰队",
       "manpower": 46000,
       "maintenance_per_turn": 5,
       "supply": 65,
@@ -226,9 +221,8 @@
       "status": "江南财赋重地，军力可守不可远征，士绅牵制明显。",
       "owner_power": "ming",
       "troop_composition": {
-        "步卒": 26000,
-        "操江水兵": 12000,
-        "卫所兵": 8000
+        "非正规步兵": 34000,
+        "桨帆舰队": 12000
       }
     },
     {
@@ -238,7 +232,7 @@
       "theater": "东南海防",
       "commander": "福建巡抚与水师将领",
       "controller": "兵部",
-      "troop_type": "水师、炮船兵、海防兵",
+      "troop_type": "桨帆舰队",
       "manpower": 18000,
       "maintenance_per_turn": 3,
       "supply": 47,
@@ -251,9 +245,7 @@
       "status": "海防与海贸灰区纠缠，能巡海但难离本省太久。",
       "owner_power": "ming",
       "troop_composition": {
-        "水师": 12000,
-        "炮船兵": 3000,
-        "海防兵": 3000
+        "桨帆舰队": 18000
       }
     },
     {
@@ -263,9 +255,9 @@
       "theater": "南海海防",
       "commander": "广东巡抚与水师将领",
       "controller": "兵部",
-      "troop_type": "水师、炮船兵、海防兵",
+      "troop_type": "桨帆舰队",
       "manpower": 16000,
-      "maintenance_per_turn": 2,
+      "maintenance_per_turn": 3,
       "supply": 50,
       "morale": 51,
       "training": 50,
@@ -276,9 +268,7 @@
       "status": "可守海口与护商，远离本地会受地方掣肘。",
       "owner_power": "ming",
       "troop_composition": {
-        "水师": 10000,
-        "炮船兵": 3000,
-        "海防兵": 3000
+        "桨帆舰队": 16000
       }
     },
     {
@@ -288,7 +278,7 @@
       "theater": "西南",
       "commander": "各土司",
       "controller": "地方督抚",
-      "troop_type": "土兵、山地步卒、弓弩兵",
+      "troop_type": "非正规步兵",
       "manpower": 24000,
       "maintenance_per_turn": 2,
       "supply": 40,
@@ -301,9 +291,7 @@
       "status": "山地作战有用，听调取决于土司关系和赏赐名分。",
       "owner_power": "ming",
       "troop_composition": {
-        "土兵": 12000,
-        "山地步卒": 8000,
-        "弓弩兵": 4000
+        "非正规步兵": 24000
       }
     },
     {
@@ -313,7 +301,7 @@
       "theater": "辽东外线",
       "commander": "皇太极、代善、莽古尔泰",
       "controller": "后金汗廷",
-      "troop_type": "八旗骑兵、披甲步兵、巴牙喇",
+      "troop_type": "骑兵、非正规步兵",
       "manpower": 62000,
       "maintenance_per_turn": 0,
       "supply": 58,
@@ -326,9 +314,8 @@
       "status": "努尔哈赤旧部仍强，皇太极新立，诸贝勒共议牵制汗权。",
       "owner_power": "houjin",
       "troop_composition": {
-        "八旗骑兵": 32000,
-        "披甲步兵": 22000,
-        "巴牙喇": 8000
+        "骑兵": 40000,
+        "非正规步兵": 22000
       }
     },
     {
@@ -338,7 +325,7 @@
       "theater": "辽东外线",
       "commander": "佟养性、范文程等",
       "controller": "后金汗廷",
-      "troop_type": "降军、炮匠、步卒、通译文吏",
+      "troop_type": "非正规步兵",
       "manpower": 18000,
       "maintenance_per_turn": 0,
       "supply": 48,
@@ -351,10 +338,7 @@
       "status": "尚未成后世汉八旗规模，但铸炮、通译、招降明边价值渐增。",
       "owner_power": "houjin",
       "troop_composition": {
-        "降军": 9000,
-        "炮匠": 3000,
-        "步卒": 4000,
-        "通译文吏": 2000
+        "非正规步兵": 18000
       }
     },
     {
@@ -364,7 +348,7 @@
       "theater": "漠南草原",
       "commander": "林丹汗",
       "controller": "察哈尔汗廷",
-      "troop_type": "草原骑兵、部族兵",
+      "troop_type": "骑兵、非正规步兵",
       "manpower": 36000,
       "maintenance_per_turn": 0,
       "supply": 42,
@@ -377,8 +361,8 @@
       "status": "诸部离心，仍有机动优势；若后金压迫过甚，可能西走或倒向一方。",
       "owner_power": "mongol",
       "troop_composition": {
-        "草原骑兵": 30000,
-        "部族兵": 6000
+        "骑兵": 30000,
+        "非正规步兵": 6000
       }
     },
     {
@@ -388,7 +372,7 @@
       "theater": "朝鲜",
       "commander": "朝鲜备边司诸将",
       "controller": "朝鲜朝廷",
-      "troop_type": "边军、弓手、火器兵、水军",
+      "troop_type": "非正规步兵、火炮队、桨帆舰队",
       "manpower": 28000,
       "maintenance_per_turn": 0,
       "supply": 46,
@@ -401,10 +385,9 @@
       "status": "丁卯之役后谨慎自保，明后金之间左右支应。",
       "owner_power": "korea",
       "troop_composition": {
-        "边军": 12000,
-        "弓手": 7000,
-        "火器兵": 5000,
-        "水军": 4000
+        "非正规步兵": 19000,
+        "火炮队": 5000,
+        "桨帆舰队": 4000
       }
     },
     {
@@ -414,7 +397,7 @@
       "theater": "陕北",
       "commander": "王嘉胤",
       "controller": "自立",
-      "troop_type": "饥民、逃卒、驿卒",
+      "troop_type": "非正规步兵",
       "manpower": 3500,
       "maintenance_per_turn": 0,
       "supply": 22,
@@ -427,9 +410,7 @@
       "status": "小股啸聚初成气候，若陕西赈抚失措，极易滚成大股流寇。",
       "owner_power": "bandits",
       "troop_composition": {
-        "饥民": 2200,
-        "逃卒": 900,
-        "驿卒": 400
+        "非正规步兵": 3500
       }
     }
   ]

@@ -687,6 +687,7 @@ export type ExtractionData = {
   year: number;
   period: number;
   exists: boolean;
+  narrative?: string;
   extractor_output?: any;
 };
 

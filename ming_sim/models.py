@@ -263,7 +263,7 @@ class PresetTechnology:
     fail_condition: str
     effect_on_resolve: Dict[str, object]
     effect_on_fail: Dict[str, object]
-    requires: List[str] = field(default_factory=list)  # 前置科技 key；空=根节点
+    requires: List[str] = field(default_factory=list)  # 前置科技 key；空=根节点。立项时强制校验前置全研成（_unmet_tech_prereqs）
     default_unlocked: bool = False                     # 新档开局即已研成并 seed 入 technologies
 
 

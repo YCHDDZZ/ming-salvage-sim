@@ -467,11 +467,15 @@ export function ArmyDrawer({
     return parts.map(([name, amount]) => `${name}${amount}`).join("、");
   };
   const troopRate = (name: string) => {
-    if (/炮|火器|铳|佛郎机/.test(name)) return 0.2;
-    if (/骑|八旗|巴牙喇|披甲|马/.test(name)) return 0.16;
-    if (/水|船|岛|海防|操江/.test(name)) return 0.13;
-    if (/边军|关隘|守军|卫所|镇/.test(name)) return 0.12;
-    return 0.08;
+    const rates: Record<string, number> = {
+      非正规步兵: 0.08, 线列步兵: 0.12, 野战炮兵: 0.22, 散兵: 0.16,
+      火炮队: 0.2,
+      堑壕步兵: 0.24, 班组步兵: 0.32, 机械化步兵: 0.48,
+      骑兵: 0.16, 龙骑兵: 0.19, 骠骑兵: 0.2, 手枪骑兵: 0.23, 装甲骑兵: 0.42,
+      桨帆舰队: 0.18, 风帆战舰: 0.28, 铁甲舰: 0.45, 无畏舰: 0.7,
+      侦察机: 1.0, 战斗机: 1.35, 轰炸机: 1.6,
+    };
+    return rates[name] ?? 0.08;
   };
   const troopMonthlyPay = (name: string, amount: number) => troopRate(name) * amount / 1000;
   const formatWan = (value: number) => {
@@ -483,14 +487,25 @@ export function ArmyDrawer({
     return entries.reduce((sum, [name, amount]) => sum + troopMonthlyPay(String(name), Number(amount)), 0);
   };
   const defaultTroopEquipment = (name: string) => {
-    if (/炮船/.test(name)) return "炮船、佛郎机、虎蹲炮、鸟铳";
-    if (/炮|火器|铳|佛郎机/.test(name)) return "火铳、三眼铳、虎蹲炮、药弹";
-    if (/骑|八旗|巴牙喇|披甲|马/.test(name)) return "战马、弓刀、长枪、棉甲";
-    if (/水|船|岛|海防|操江/.test(name)) return "战船、鸟铳、弓刀、火器";
-    if (/边军|关隘|守军|卫所|镇/.test(name)) return "长枪、腰刀、弓弩、火铳";
-    if (/弓/.test(name)) return "弓弩、腰刀、藤牌";
-    if (/土兵|山地/.test(name)) return "藤牌、短刀、弓弩、长矛";
-    return "长枪、腰刀、藤牌、弓弩";
+    const equipment: Record<string, string> = {
+      非正规步兵: "武器", 线列步兵: "武器", 火炮队: "武器 + 火炮", 野战炮兵: "武器 + 火炮 + 弹药", 散兵: "武器 + 弹药",
+      堑壕步兵: "武器 + 弹药", 班组步兵: "武器 + 弹药", 机械化步兵: "武器 + 弹药 + 车辆",
+      骑兵: "座骑 + 武器", 龙骑兵: "座骑 + 武器", 骠骑兵: "座骑 + 武器",
+      手枪骑兵: "座骑 + 武器 + 手枪", 装甲骑兵: "车辆 + 武器",
+      桨帆舰队: "舰船", 风帆战舰: "舰船", 铁甲舰: "舰船", 无畏舰: "舰船",
+      侦察机: "飞机（待研究）", 战斗机: "飞机（待研究）", 轰炸机: "飞机（待研究）",
+    };
+    return equipment[name] ?? "武器";
+  };
+  const troopUpgradeText = (name: string) => {
+    const upgrades: Record<string, string> = {
+      非正规步兵: "线列步兵", 线列步兵: "火炮队 / 散兵", 火炮队: "野战炮兵", 野战炮兵: "榴霰炮兵 / 攻城炮兵",
+      散兵: "堑壕步兵", 堑壕步兵: "班组步兵", 班组步兵: "机械化步兵", 机械化步兵: "—",
+      骑兵: "龙骑兵 / 骠骑兵", 龙骑兵: "手枪骑兵", 骠骑兵: "手枪骑兵", 手枪骑兵: "装甲骑兵", 装甲骑兵: "—",
+      桨帆舰队: "风帆战舰", 风帆战舰: "铁甲舰", 铁甲舰: "无畏舰", 无畏舰: "—",
+      侦察机: "战斗机 / 轰炸机", 战斗机: "—", 轰炸机: "—",
+    };
+    return upgrades[name] ?? "—";
   };
   const issuedEquipmentText = (army: Army) => {
     return army.arms && army.arms.length > 0
@@ -568,7 +583,7 @@ export function ArmyDrawer({
               </table>
               <table className="intel-table army-troop-table">
                 <thead>
-                  <tr><th>兵种</th><th>人数</th><th>单价</th><th>月饷</th><th>装备</th></tr>
+                  <tr><th>兵种</th><th>人数</th><th>单价</th><th>月饷</th><th>装备</th><th>升级</th></tr>
                 </thead>
                 <tbody>
                   {(troopEntries(selected).length ? troopEntries(selected) : [[selected.troop_type || "未分兵种", selected.manpower]]).map(([name, amount]) => {
@@ -582,6 +597,7 @@ export function ArmyDrawer({
                         <td>{rate.toFixed(2)}万/千人</td>
                         <td>{formatWan(monthlyPay)}万两</td>
                         <td>{defaultTroopEquipment(troopName)}；评分{selected.equipment}{issuedEquipmentText(selected)}</td>
+                        <td>{troopUpgradeText(troopName)}</td>
                       </tr>
                     );
                   })}

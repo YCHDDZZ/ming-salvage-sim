@@ -6,6 +6,7 @@ _TOKEN_PATCH_INSTALLED 守卫保证补丁只打一次。
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime
 from typing import Dict
 
@@ -13,6 +14,26 @@ from ming_sim.llm_config import is_dashscope_base_url
 
 TOKEN_STATS: Dict[str, Dict[str, int]] = {}
 _TOKEN_PATCH_INSTALLED = False
+
+# 非流式 agent（extractor/sanitizer/decree-writer）跑完会从 agno RunMetrics 自记 token（含
+# cache_read/write，dashscope 原生 usage 不报这俩）。置位时让 monkeypatch 跳过原生 _record_usage，
+# 避免同一次调用被 agno metrics + 原生 usage 双重记账。thread-local：并行 extractor 各线程独立。
+_prefer_agno_metrics = threading.local()
+
+
+def prefer_agno_metrics_enabled() -> bool:
+    return getattr(_prefer_agno_metrics, "on", False)
+
+
+class use_agno_metrics:
+    """with 块内：本线程的 openai .create 不走原生 usage 记账，改由调用方用 agno metrics 记。"""
+    def __enter__(self):
+        self._prev = getattr(_prefer_agno_metrics, "on", False)
+        _prefer_agno_metrics.on = True
+        return self
+    def __exit__(self, *exc):
+        _prefer_agno_metrics.on = self._prev
+        return False
 
 
 def ts() -> str:
@@ -235,8 +256,9 @@ def install_token_stats_patch() -> None:
             _inject_dashscope_cache_mark(kwargs)
         resp = orig_create(self, *args, **kwargs)
         try:
-            model_id = getattr(resp, "model", kwargs.get("model", "unknown"))
-            _record_usage(model_id, getattr(resp, "usage", None), caller_tag)
+            if not prefer_agno_metrics_enabled():  # 调用方将用 agno metrics 记账，跳过避免双计
+                model_id = getattr(resp, "model", kwargs.get("model", "unknown"))
+                _record_usage(model_id, getattr(resp, "usage", None), caller_tag)
         except Exception:
             pass
         return resp
@@ -248,8 +270,9 @@ def install_token_stats_patch() -> None:
             _inject_dashscope_cache_mark(kwargs)
         resp = await orig_acreate(self, *args, **kwargs)
         try:
-            model_id = getattr(resp, "model", kwargs.get("model", "unknown"))
-            _record_usage(model_id, getattr(resp, "usage", None), caller_tag)
+            if not prefer_agno_metrics_enabled():
+                model_id = getattr(resp, "model", kwargs.get("model", "unknown"))
+                _record_usage(model_id, getattr(resp, "usage", None), caller_tag)
         except Exception:
             pass
         return resp

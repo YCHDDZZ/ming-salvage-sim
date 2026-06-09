@@ -18,7 +18,7 @@ from ming_sim.constants import (
     POWER_FIELD_ALIASES, POWER_TEXT_FIELDS, MONEY_UNIT, REGION_FIELD_LABELS, REGION_QUANTITY_FIELDS,
     FISCAL_SCORE_FIELDS, REGION_FIELD_ALIASES, REGION_SCORE_FIELDS, REGION_TEXT_FIELDS, TURN_UNIT,
 )
-from ming_sim.content import GameContent
+from ming_sim.content import GameContent, canon_troop_name, normalize_troop_composition
 from ming_sim.matching import match_army_id_from_text, match_region_id_from_text
 from ming_sim.models import Army, Event, GameState, monthly_amount, period_label
 from ming_sim.token_stats import tlog
@@ -31,6 +31,7 @@ from ming_sim.db._helpers import (
 
 class _ArmiesMixin:
     def _army_troop_composition(self, row: sqlite3.Row | Dict[str, object]) -> Dict[str, int]:
+        spec = self.content.troop_cost
         raw = row["troop_composition"] if "troop_composition" in row.keys() else "{}"  # type: ignore[attr-defined]
         try:
             data = json.loads(str(raw or "{}"))
@@ -39,26 +40,54 @@ class _ArmiesMixin:
         if isinstance(data, dict):
             out: Dict[str, int] = {}
             for key, value in data.items():
-                troop = str(key).strip()
+                troop = canon_troop_name(str(key).strip(), spec)
                 try:
                     amount = int(value)
                 except (TypeError, ValueError):
                     amount = 0
                 if troop and amount > 0:
-                    out[troop] = amount
+                    out[troop] = out.get(troop, 0) + amount
             if out:
                 return out
         troop_type = str(row["troop_type"] or "")
         manpower = int(row["manpower"] or 0)
-        return {troop_type: manpower} if troop_type and manpower > 0 else {}
+        return {canon_troop_name(troop_type, spec): manpower} if troop_type and manpower > 0 else {}
 
     def _composition_text(self, composition: Dict[str, int]) -> str:
         return "、".join(k for k, v in composition.items() if int(v) > 0)
 
+    def _gate_troop_composition(self, composition: Dict[str, int]) -> Tuple[Dict[str, int], List[str]]:
+        """对已归一的 composition 做科技门控：预设兵种未解锁（troop_unlocked=False）的，
+        兵力并入 default_tier（不断游戏）。runtime/AI 新兵种 troop_unlocked 默认放行，原样保留。
+        体现「预设超前兵种须先研成对应科技才能编」。
+        返回 (门控后 composition, 人话说明清单)——说明会透出到回合明细，让玩家知道程序代为降级了。"""
+        default_tier = str(self.content.troop_cost.get("default_tier") or "非正规步兵")
+        gated: Dict[str, int] = {}
+        notes: List[str] = []
+        for troop, amount in composition.items():
+            if amount <= 0:
+                continue
+            if self.troop_unlocked(troop):
+                gated[troop] = gated.get(troop, 0) + amount
+            else:
+                req = self._troop_required_tech(troop)
+                req_hint = f"需先研成「{req}」" if req else "前置科技未解锁"
+                note = f"{troop}{amount}兵{req_hint}，暂并入「{default_tier}」"
+                print(f"[WARN] {note}")
+                notes.append(note)
+                gated[default_tier] = gated.get(default_tier, 0) + amount
+        return gated, notes
+
+    def _troop_required_tech(self, tier_name: str) -> str:
+        """该兵种的前置科技名（未注册/无门槛→空串）。供门控说明用。"""
+        row = self.conn.execute(
+            "SELECT requires_tech FROM troop_tiers WHERE name=?", (str(tier_name or ""),)).fetchone()
+        return str(row["requires_tech"] or "").strip() if row else ""
+
     def _apply_composition_delta(self, composition: Dict[str, int], troop_type: str, delta: int) -> Dict[str, int]:
-        troop = str(troop_type or "").strip()
-        if not troop:
-            troop = next(iter(composition), "步卒")
+        # 扩/裁编兵力增量归到哪个兵种：troop_hint（番号/兵种串）归一到固定兵种名（闭集），
+        # 不再硬编码「步兵/骑兵/海军/空军」基类（那些不在 troop_cost 闭集里）。
+        troop = canon_troop_name(str(troop_type or ""), self.content.troop_cost)
         new_comp = dict(composition)
         new_amount = max(0, int(new_comp.get(troop, 0)) + int(delta))
         if new_amount:
@@ -369,16 +398,12 @@ class _ArmiesMixin:
                 elif field in ARMY_TEXT_FIELDS:
                     if field == "troop_composition":
                         old_comp = self._army_troop_composition(row)
-                        next_comp: Dict[str, int] = {}
-                        if isinstance(value, dict):
-                            for k, v in value.items():
-                                try:
-                                    amount = int(v)
-                                except (TypeError, ValueError):
-                                    amount = 0
-                                troop = str(k).strip()
-                                if troop and amount > 0:
-                                    next_comp[troop] = amount
+                        # extractor 给的 composition key 可能是脏名/番号 → 归一到固定兵种名（闭集）；
+                        # 再过科技门控（ming 军：未解锁的超前兵种并入 default_tier）。
+                        next_comp = normalize_troop_composition(value, troop_cost=self.content.troop_cost)
+                        gate_notes: List[str] = []
+                        if str(row["owner_power"]) == "ming":
+                            next_comp, gate_notes = self._gate_troop_composition(next_comp)
                         if not next_comp or next_comp == old_comp:
                             continue
                         new_manpower = sum(next_comp.values())
@@ -398,7 +423,7 @@ class _ArmiesMixin:
                             """,
                             (state.turn, state.year, state.period, army_id, field, old_text, new_text, reason, event.id, edict_id, actor),
                         )
-                        changes.append({
+                        change_entry = {
                             "army": row["name"],
                             "field": field,
                             "label": ARMY_FIELD_LABELS.get(field, field),
@@ -406,7 +431,11 @@ class _ArmiesMixin:
                             "new": next_comp,
                             "delta": None,
                             "reason": reason,
-                        })
+                        }
+                        if gate_notes:
+                            # 程序因科技门控代为降级了部分兵种，透出到明细让玩家知情
+                            change_entry["note"] = "；".join(gate_notes)
+                        changes.append(change_entry)
                         continue
                     text_value = str(value).strip()[:160]
                     if field == "owner_power":
@@ -622,21 +651,16 @@ class _ArmiesMixin:
             except (KeyError, TypeError, ValueError):
                 print(f"[WARN] new_armies '{aid}' 缺 manpower → 跳过")
                 continue
-            troop_composition: Dict[str, int] = {}
-            raw_comp = item.get("troop_composition")
-            if isinstance(raw_comp, dict):
-                for k, v in raw_comp.items():
-                    try:
-                        amount = int(v)
-                    except (TypeError, ValueError):
-                        amount = 0
-                    troop = str(k).strip()
-                    if troop and amount > 0:
-                        troop_composition[troop] = amount
-            if not troop_composition:
-                troop_type_seed = str(item.get("troop_type") or "").strip()
-                if troop_type_seed and manpower > 0:
-                    troop_composition = {troop_type_seed: manpower}
+            # 新建军 composition key / troop_type 都归一到固定兵种名（闭集），杜绝脏名入库
+            troop_composition = normalize_troop_composition(
+                item.get("troop_composition"),
+                fallback_troop_type=str(item.get("troop_type") or ""),
+                fallback_manpower=manpower,
+                troop_cost=self.content.troop_cost,
+            )
+            gate_notes: List[str] = []
+            if owner == "ming":
+                troop_composition, gate_notes = self._gate_troop_composition(troop_composition)
             if troop_composition:
                 manpower = sum(troop_composition.values())
             maintenance = self.content.troop_maintenance_total(troop_composition) if owner == "ming" else int(item.get("maintenance_per_turn") or 0)
@@ -696,13 +720,16 @@ class _ArmiesMixin:
                 """,
                 (state.turn, state.year, state.period, aid, str(manpower), manpower, reason, actor),
             )
-            created.append({
+            created_entry = {
                 "army": name,
                 "id": aid,
                 "owner_power": owner,
                 "manpower": manpower,
                 "created": True,
                 "reason": reason,
-            })
+            }
+            if gate_notes:
+                created_entry["note"] = "；".join(gate_notes)
+            created.append(created_entry)
         self.conn.commit()
         return created

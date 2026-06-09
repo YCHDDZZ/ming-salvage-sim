@@ -96,13 +96,19 @@ def effect_brief(applied: Dict[str, object]) -> str:
         names = "、".join(_short(a.get("title"), 16) for a in advances[:3])
         parts.append(f"推进局势：{names}")
 
-    # 建筑成就：局势结案落地的建筑新建/扩建/废止（埋在 closes[].building_ops）。
+    # 建筑成就：局势结案落地的建筑新建/扩建/废止（埋在 closes[]/advances[] 的 building_ops）。
     built: List[str] = []
     upgraded: List[str] = []
     razed: List[str] = []
-    for c in closes:
+    blocked_builds: List[str] = []  # 科技门控等原因被拒的新建，透出让玩家知情
+    for c in [*closes, *advances]:
         for op in c.get("building_ops") or []:
             if not isinstance(op, dict):
+                continue
+            if op.get("rejected"):
+                note = _short(op.get("note") or op.get("name"), 30)
+                if note:
+                    blocked_builds.append(note)
                 continue
             action = str(op.get("action") or "")
             if action == "create":
@@ -123,6 +129,8 @@ def effect_brief(applied: Dict[str, object]) -> str:
         parts.append(f"扩建提级：{'、'.join(u for u in upgraded if u)[:60]}")
     if razed:
         parts.append(f"废止：{'、'.join(r for r in razed if r)[:60]}")
+    if blocked_builds:
+        parts.append(f"工程受阻：{'；'.join(blocked_builds)[:80]}")
 
     offices = [o for o in (applied.get("office_changes") or []) if isinstance(o, dict) and not o.get("rejected")]
     if offices:
@@ -136,6 +144,17 @@ def effect_brief(applied: Dict[str, object]) -> str:
     if status_changes:
         names = "、".join(_short(s.get("name"), 8) for s in status_changes[:3])
         parts.append(f"处分：{names}")
+
+    # 科技门控：程序代为降级的编制（塞入未解锁兵种被并入 default），透出让玩家知情。
+    gate_notes: List[str] = []
+    for ch in (applied.get("army_changes") or []):
+        if isinstance(ch, dict) and ch.get("note"):
+            gate_notes.append(str(ch["note"]))
+    for ca in (applied.get("created_armies") or []):
+        if isinstance(ca, dict) and ca.get("note"):
+            gate_notes.append(str(ca["note"]))
+    if gate_notes:
+        parts.append(f"科技未及：{'；'.join(gate_notes)[:80]}")
 
     return "；".join(parts) or "盘面无显著结构化变化"
 

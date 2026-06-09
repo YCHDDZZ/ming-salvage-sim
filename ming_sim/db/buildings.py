@@ -32,6 +32,16 @@ from ming_sim.db._helpers import (
 class _BuildingsMixin:
     # ── 建筑 ──────────────────────────────────────────────────────────────────
 
+    def tech_unlocked(self, tech_name: str) -> bool:
+        """通用前置科技判定：tech_name 空→True；否则 technologies 表按 name 命中（已研成）。
+        weapon/troop/building 三处门控共用。"""
+        tech = str(tech_name or "").strip()
+        if not tech:
+            return True
+        return self.conn.execute(
+            "SELECT 1 FROM technologies WHERE name=?", (tech,)
+        ).fetchone() is not None
+
     def add_building(
         self,
         state: GameState,
@@ -47,12 +57,16 @@ class _BuildingsMixin:
         output_amount: int = 0,
         status: str = "",
         origin: str = "decree",
+        requires_tech: str = "",
     ) -> str:
-        """运行时新立建筑（玩家诏书）。category / output_metric 走白名单硬校验，违规 ValueError。"""
+        """运行时新立建筑（玩家诏书）。category / output_metric 走白名单硬校验，违规 ValueError。
+        requires_tech 非空且未研成 → ValueError（预设建筑的科技门控；AI 新建可留空放行）。"""
         if category not in BUILDING_CATEGORIES:
             raise ValueError(f"建筑 category 非法 '{category}'，白名单 {BUILDING_CATEGORIES}")
         if output_metric not in BUILDING_OUTPUT_METRICS:
             raise ValueError(f"建筑 output_metric 非法 '{output_metric}'，白名单 {BUILDING_OUTPUT_METRICS}")
+        if not self.tech_unlocked(requires_tech):
+            raise ValueError(f"建筑「{name}」前置科技「{requires_tech}」未研成，不可新立")
         if self.conn.execute("SELECT 1 FROM regions WHERE id = ?", (region_id,)).fetchone() is None:
             raise ValueError(f"建筑 region_id 引用未入库地区 '{region_id}'")
         base = re.sub(r"[^a-z0-9]+", "", (region_id or "rgn").lower()) or "rgn"
@@ -67,8 +81,8 @@ class _BuildingsMixin:
             """
             INSERT INTO buildings
             (id, region_id, name, category, level, condition, maintenance, risk,
-             output_metric, output_amount, status, origin, created_turn)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             output_metric, output_amount, status, origin, requires_tech, created_turn)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 building_id,
@@ -83,6 +97,7 @@ class _BuildingsMixin:
                 max(0, int(output_amount)),
                 status.strip()[:160] or "新立，尚在筹建。",
                 origin,
+                str(requires_tech or "").strip(),
                 state.turn,
             ),
         )

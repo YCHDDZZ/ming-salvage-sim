@@ -324,6 +324,7 @@ def _apply_issue_buildings(
                     output_amount=int(op.get("output_amount", 0)),
                     status=str(op.get("status") or ""),
                     origin="issue",
+                    requires_tech=str(op.get("requires_tech") or ""),
                 )
                 applied.append({"action": "create", "building_id": bid,
                                  "name": str(op.get("name") or "")})
@@ -342,6 +343,13 @@ def _apply_issue_buildings(
                 print(f"[WARN] issue effect buildings: action 非法 '{action}'，跳过。")
         except Exception as exc:
             print(f"[WARN] issue effect buildings 落库失败：{exc}；op={op}")
+            # 程序拒绝了这次新建（含科技门控未解锁）→ 透出到明细让玩家知情，而非静默吞掉
+            applied.append({
+                "action": action or "create",
+                "name": str(op.get("name") or ""),
+                "rejected": True,
+                "note": str(exc)[:120],
+            })
     return applied
 
 
@@ -415,6 +423,25 @@ def _preset_override_new_issue(ni: Dict[str, object]) -> Dict[str, object]:
     merged["effect_on_resolve"] = dict(preset.effect_on_resolve)
     merged["effect_on_fail"] = dict(preset.effect_on_fail)
     return merged
+
+
+def _unmet_tech_prereqs(db: GameDB, ni: Dict[str, object]) -> List[str]:
+    """命中预设科技的 new_issue：检查 preset.requires 前置科技链是否全已研成。
+    requires 存前置科技 key → 转预设 name → 查 technologies 表。返回未满足的前置科技名（空=全满足）。"""
+    scope, preset = _find_preset_key(ni)
+    if scope != "technologies" or preset is None:
+        return []
+    requires = getattr(preset, "requires", None) or []
+    if not requires:
+        return []
+    pool = _ctx().preset_technologies
+    unmet: List[str] = []
+    for req_key in requires:
+        req_preset = pool.get(str(req_key).strip())
+        req_name = req_preset.name if req_preset is not None else str(req_key)
+        if not db.tech_unlocked(req_name):
+            unmet.append(req_name)
+    return unmet
 
 
 def _apply_issue_departments(
@@ -1342,6 +1369,7 @@ def apply_issue_tracker_output(
         if new_row is None:
             continue
         touched_ids.add(issue_id)
+        building_ops: List[Dict[str, object]] = []
         # 终结结算：bar 自然推到 100/0 触发的 resolved/failed，与 close_issues 一样落终结效果（含建筑）
         if new_row["status"] == "resolved":
             # 预设为底 + 本条推进现填覆盖（issue 立项时已带实体的用预设；空的用现填）。
@@ -1358,7 +1386,7 @@ def apply_issue_tracker_output(
             _apply_metric_dict(state, effect.get("metrics") or {}, db=db)
             _apply_economy_list(db, state, effect.get("economy") or [])
             _apply_faction_dict(db, effect.get("factions") or {})
-            _apply_issue_buildings(db, state, effect.get("buildings"), _ISSUE_PSEUDO_EVENT, f"局势#{issue_id}结案")
+            building_ops = _apply_issue_buildings(db, state, effect.get("buildings"), _ISSUE_PSEUDO_EVENT, f"局势#{issue_id}结案")
             _preset_lg = _apply_issue_departments(db, state, effect.get("departments"), f"局势#{issue_id}结案", issue_id)
             _preset_lg = _apply_issue_technologies(db, state, effect.get("technologies"), f"局势#{issue_id}结案", issue_id) or _preset_lg
             _apply_issue_fiscal(db, state, effect.get("fiscal"), f"局势#{issue_id}结案")
@@ -1370,7 +1398,7 @@ def apply_issue_tracker_output(
             _apply_metric_dict(state, effect.get("metrics") or {}, db=db)
             _apply_economy_list(db, state, effect.get("economy") or [])
             _apply_faction_dict(db, effect.get("factions") or {})
-            _apply_issue_buildings(db, state, effect.get("buildings"), _ISSUE_PSEUDO_EVENT, f"局势#{issue_id}失败")
+            building_ops = _apply_issue_buildings(db, state, effect.get("buildings"), _ISSUE_PSEUDO_EVENT, f"局势#{issue_id}失败")
             _spawn_legacy_from_effect(db, state, effect, issue_id, str(new_row["title"]))
         applied_advances.append({
             "issue_id": issue_id,
@@ -1382,6 +1410,7 @@ def apply_issue_tracker_output(
             "stage_text": new_row["stage_text"],
             "status": new_row["status"],
             "narrative": narrative,
+            **({"building_ops": building_ops} if building_ops else {}),
             **({"budget_spent": round(budget_spent_actual, 1)} if budget_spent_actual > 0 else {}),
         })
 
@@ -1436,6 +1465,12 @@ def apply_issue_tracker_output(
             continue
         if kind == "initiative" and initiative_active >= 10:
             applied_new.append({"title": title, "rejected": True, "reason": "已有十事在办，朝廷分身乏术，难再添新工。"})
+            continue
+        unmet = _unmet_tech_prereqs(db, ni)
+        if unmet:
+            reason_txt = f"前置科技未成：需先研成「{'、'.join(unmet)}」方可立此事"
+            print(f"[INFO] new_issue 已拒：'{title}'（{reason_txt}）")
+            applied_new.append({"title": title, "rejected": True, "reason": reason_txt})
             continue
         try:
             issue_id = db.insert_issue(

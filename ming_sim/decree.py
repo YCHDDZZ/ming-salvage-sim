@@ -74,6 +74,25 @@ DECISION_NARRATIVE_PREFIX = (
 _DECISION_RE = re.compile(r"<<DECISION>>\s*(.*?)\s*<<END>>", re.DOTALL)
 MAX_DECISIONS_PER_TURN = 5
 
+# 「陛下未知者」详细暗线：simulator 用 <secret>…</secret> 包住只供留痕/结算、不给玩家看的
+# 详细内幕（具体人名、数目、密报原话）；标签外的粗略梗概句留给玩家。落库时 turn_report
+# 剥掉 secret 段只存粗略版，turn_extraction 存含 secret 的原文供 extractor 与事后追溯。
+_SECRET_DETAIL_RE = re.compile(r"<secret>\s*(.*?)\s*</secret>", re.DOTALL)
+
+
+def strip_secret_detail(narrative: str) -> str:
+    """剥掉 <secret>…</secret> 详细暗线段（连同标签），得到给玩家看的粗略版邸报。
+    标签成对缺失/残缺也安全：仅删成对匹配段，多余裸标签一并清掉防泄漏。"""
+    if not narrative:
+        return narrative
+    clean = _SECRET_DETAIL_RE.sub("", narrative)
+    # 兜底：模型偶尔漏闭合标签，裸 <secret>/</secret> 一律删掉，绝不让标签字面泄露给玩家。
+    clean = clean.replace("<secret>", "").replace("</secret>", "")
+    # 删 secret 段后可能留下多余空行/行尾空格，收一下。
+    clean = re.sub(r"[ \t]+\n", "\n", clean)
+    clean = re.sub(r"\n{3,}", "\n\n", clean)
+    return clean.strip()
+
 
 def parse_decision_blocks(narrative: str) -> tuple[str, List[Dict[str, object]]]:
     """[已废弃，保留代码供回退/参考——HITL 链路随 resolve_directives 一并停用]
@@ -428,13 +447,14 @@ def _settle_after_narrative(
         llm_config=llm_config, agno_db=agno_db,
     )
 
-    # 4) 月末邸报落库（下月作前文）
-    db.save_turn_report(state, narrative)
-    # 推演链原始输入/输出留痕，事后可追「该立的 issue 为何没立」。
+    # 4) 月末邸报落库（下月作前文）。turn_report 给玩家看：剥掉「陛下未知者」<secret> 详细暗线，
+    #    只留粗略梗概；详细版只进 extraction 留痕 + 已喂过 extractor。
+    db.save_turn_report(state, strip_secret_detail(narrative))
+    # 推演链原始输入/输出留痕，事后可追「该立的 issue 为何没立」。含 secret 详细暗线。
     db.save_turn_extraction(
         state,
         decree_text=decree_text,
-        narrative=effective_narrative,  # 留痕含作弊段，便于事后追「为何这么落库」
+        narrative=effective_narrative,  # 留痕含作弊段 + secret 详细，便于事后追「为何这么落库」
         extractor_input=extractor_input,
         extractor_output=extractor_output,
     )

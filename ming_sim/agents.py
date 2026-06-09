@@ -56,7 +56,7 @@ _HITL_PROMPT = """## 4. 遇阻反馈与动态纠偏（HITL 决策点，最多 5 
 
 - `options` 给 **2-3 个**互斥选项；`label` 是皇帝可下的纠偏旨意（追加专款、授/不授专断、换人、强推、暂缓、改路线、收网等），`hint` 只给**方向性倾向**（如「推进加速，然耗内帑且激怒部院」），**不写具体数值、不写 bar/±N**。
 - `context` 写清承办人反馈的阻力与请裁缘由，别复述整章正文。
-- 决策块只放奏章**最末尾**，放在最后一章「陛下未知者」之后；块外不再有正文。
+- 决策块只放奏章**最末尾**，放在整份奏章正文（最后一章）之后；块外不再有正文。
 - 决策块必须从本{{TURN_UNIT}}盘面/诏书/在办局势/候选情势/密令日志中的真实阻力自然长出，**不得为凑决策点硬造**清单外的新危机；上限只限制最多写几处，不要求写满。"""
 
 
@@ -124,12 +124,19 @@ def _dump_llm_messages(output: Any, tag: str, agent: Optional[Agent] = None) -> 
 
 def run_agent_text(agent: Agent, prompt: str, tag: str) -> str:
     """非流式跑 agent，返回最终完整文本。
-    extractor/sanitizer 这类要严格 JSON 的场合用——避免流式 buffer 把 LLM 偶发重发段累加成畸形。"""
+    extractor/sanitizer 这类要严格 JSON 的场合用——避免流式 buffer 把 LLM 偶发重发段累加成畸形。
+
+    token 记账走 agno RunMetrics（与流式大臣同口径，含 cache_read/write）：dashscope 原生
+    usage 不报 cached_tokens，靠 monkeypatch 抓只能得 0；agno metrics 能聚合出缓存命中。
+    用 use_agno_metrics 关掉本次的 monkeypatch 原生记账，避免 prompt/completion 双计。"""
     tlog(f"[{tag}] 开始非流式推演（等待完整响应）")
     t0 = time.monotonic()
-    output = agent.run(prompt)
+    with use_agno_metrics():
+        output = agent.run(prompt)
     _dump_llm_messages(output, tag)
     text = extract_agent_text(output)
+    model_id = getattr(getattr(agent, "model", None), "id", None) or "nonstream"
+    record_stream_metrics(str(model_id), getattr(output, "metrics", None), caller_tag=tag)
     tlog(f"[{tag}] 完成，{len(text)} 字，用时 {time.monotonic() - t0:.1f}s")
     return text
 
@@ -433,9 +440,13 @@ def build_simulator_context(simulator_payload: Optional[Dict[str, object]]) -> s
     turn_header = ""
     if isinstance(payload.get("turn"), dict):
         t = payload["turn"]
+        _y, _p = t.get("year"), t.get("period")
         turn_header = (
-            f"【本回合年月】{t.get('year')} 年 {t.get('period')} 月（第 {t.get('turn')} 回合）。"
+            f"【本回合年月】{_y} 年 {_p} 月（第 {t.get('turn')} 回合）。"
             f"涉及年月时以此为准。\n"
+            f"【奏章第二行必须逐字写】{_y}年{_p}月 {TURN_UNIT}末奏章\n"
+            f"不得改成“崇祯元年/正月/第一月”等：纪年用上面的 {_y} 年原数，月份用上面的 {_p} 月原数，"
+            f"绝不可拿史实年号或回合序号覆盖这两个数字。\n"
         )
 
     # 盘面表（{cols,rows}）转 TSV，按「稳→变」排序置前；缺失/非表的跳过。

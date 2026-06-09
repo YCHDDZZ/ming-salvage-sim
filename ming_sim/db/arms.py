@@ -25,35 +25,26 @@ class _ArmsMixin:
         cur = int(cur_raw) if cur_raw is not None and cur_raw.isdigit() else 0
         if cur >= target:
             return
-        existing_total = int((self.conn.execute(
-            "SELECT COALESCE(SUM(qty), 0) AS total FROM arms_stock"
-        ).fetchone() or {"total": 0})["total"])
-        should_seed_opening_stock = existing_total <= 0
         for w in spec.get("weapons", []):
             self.conn.execute(
                 """
-                INSERT INTO weapons (id, name, tier, power, cost, equip_per_unit, requires_tech, registered)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'seed')
+                INSERT INTO weapons (id, name, tier, cost, equip_per_unit, requires_tech, registered)
+                VALUES (?, ?, ?, ?, ?, ?, 'seed')
                 ON CONFLICT(id) DO UPDATE SET
-                  name=excluded.name, tier=excluded.tier, power=excluded.power,
+                  name=excluded.name, tier=excluded.tier,
                   cost=excluded.cost, equip_per_unit=excluded.equip_per_unit,
                   requires_tech=excluded.requires_tech, registered='seed',
                   updated_at=CURRENT_TIMESTAMP
                 WHERE weapons.registered='seed'
                 """,
-                (w["id"], w["name"], w["tier"], int(w["power"]), int(w["cost"]),
+                (w["id"], w["name"], w["tier"], int(w["cost"]),
                  float(w["equip_per_unit"]), str(w.get("requires_tech") or "")),
             )
-            # 总库行确保存在；新档写开局库存。旧档若总库全空，则版本迁移时补一次。
+            # 总库行：INSERT OR IGNORE 只在首次建行时写开局库存，已存在的库存量神圣不动。
             opening_stock = max(0, int(w.get("opening_stock") or 0))
             self.conn.execute(
                 "INSERT OR IGNORE INTO arms_stock (weapon_id, qty) VALUES (?, ?)", (w["id"], opening_stock)
             )
-            if should_seed_opening_stock and opening_stock > 0:
-                self.conn.execute(
-                    "UPDATE arms_stock SET qty=?, updated_at=CURRENT_TIMESTAMP WHERE weapon_id=? AND qty=0",
-                    (opening_stock, w["id"]),
-                )
         self.kv_set("weapons_version", str(target))
 
     # ── 型号解析 / 解锁判定 ───────────────────────────────────────────
@@ -71,11 +62,11 @@ class _ArmsMixin:
         meta = self.content.weapon_meta(key)
         self.conn.execute(
             """
-            INSERT INTO weapons (id, name, tier, power, cost, equip_per_unit, requires_tech, registered)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'runtime')
+            INSERT INTO weapons (id, name, tier, cost, equip_per_unit, requires_tech, registered)
+            VALUES (?, ?, ?, ?, ?, ?, 'runtime')
             ON CONFLICT(id) DO NOTHING
             """,
-            (meta["id"], meta["name"], meta["tier"], int(meta["power"]), int(meta["cost"]),
+            (meta["id"], meta["name"], meta["tier"], int(meta["cost"]),
              float(meta["equip_per_unit"]), str(meta.get("requires_tech") or "")),
         )
         self.conn.execute(
@@ -89,12 +80,42 @@ class _ArmsMixin:
         row = self.conn.execute("SELECT requires_tech FROM weapons WHERE id=?", (weapon_id,)).fetchone()
         if row is None:
             return False
-        tech = str(row["requires_tech"] or "").strip()
-        if not tech:
-            return True
-        return self.conn.execute(
-            "SELECT 1 FROM technologies WHERE name=?", (tech,)
-        ).fetchone() is not None
+        return self.tech_unlocked(str(row["requires_tech"] or ""))
+
+    # ── 兵种档 seed / 解锁判定 ────────────────────────────────────────
+    def init_troop_tiers(self) -> None:
+        """据 troop_cost.json seed/迁移 troop_tiers 表。版本化走 kv_store(troop_tiers_version)：
+        cur < target 才整体刷预设档（registered='seed'），runtime 注册的兵种神圣不动。"""
+        spec = self.content.troop_cost or {}
+        target = int(spec.get("version", 1))
+        cur_raw = self.kv_get("troop_tiers_version")
+        cur = int(cur_raw) if cur_raw is not None and cur_raw.isdigit() else 0
+        if cur >= target:
+            return
+        for tier in spec.get("tiers", []):
+            self.conn.execute(
+                """
+                INSERT INTO troop_tiers (name, category, per_kilo, requires_tech, registered)
+                VALUES (?, ?, ?, ?, 'seed')
+                ON CONFLICT(name) DO UPDATE SET
+                  category=excluded.category, per_kilo=excluded.per_kilo,
+                  requires_tech=excluded.requires_tech, registered='seed',
+                  updated_at=CURRENT_TIMESTAMP
+                WHERE troop_tiers.registered='seed'
+                """,
+                (str(tier.get("tier") or ""), str(tier.get("category") or ""),
+                 float(tier.get("per_kilo") or 0.0), str(tier.get("requires_tech") or "")),
+            )
+        self.kv_set("troop_tiers_version", str(target))
+
+    def troop_unlocked(self, tier_name: str) -> bool:
+        """该兵种是否可编：未注册（runtime/AI 新发明，不在表里）→True（默认放行）；
+        已注册则 requires_tech 空→True，否则 technologies 表按 name 命中。"""
+        row = self.conn.execute(
+            "SELECT requires_tech FROM troop_tiers WHERE name=?", (str(tier_name or ""),)).fetchone()
+        if row is None:
+            return True  # AI 现场发明的兵种不在预设表里，不门控
+        return self.tech_unlocked(str(row["requires_tech"] or ""))
 
     # ── 总库增减 ─────────────────────────────────────────────────────
     def _log_arms(self, state: GameState, weapon_id: str, army_id: Optional[str],

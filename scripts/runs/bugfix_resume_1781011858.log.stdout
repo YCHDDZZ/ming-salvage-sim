@@ -1,0 +1,9 @@
+=== 崇祯 Agent 自动玩家 ===
+目标：稳住国库与边防，整顿吏治推进剿抚，避免民变党争失控，不靠透支内库。诏书宜精，每月聚焦1-3道要务，勿堆砌过多草案。
+性格：你是少年新君，心里急，但表面仍收着。你会权衡派系、钱粮与名分，不轻易把话说死。
+月数：5
+DB：data/bugfix_20t.db
+模型：qwen3.6-plus @ https://dashscope.aliyuncs.com/compatible-mode/v1
+模式：续跑既有存档
+
+--resume 指定续跑，但存档不存在：['data/bugfix_20t_agno.db']。去掉 --resume 开新局，或核对 --db/--agno-db 路径。

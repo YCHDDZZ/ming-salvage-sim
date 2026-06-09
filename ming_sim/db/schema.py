@@ -246,6 +246,7 @@ class _SchemaMixin:
                 output_amount INTEGER NOT NULL DEFAULT 0,
                 status TEXT NOT NULL,
                 origin TEXT NOT NULL DEFAULT 'preset',
+                requires_tech TEXT NOT NULL DEFAULT '',
                 created_turn INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(region_id) REFERENCES regions(id)
@@ -285,9 +286,18 @@ class _SchemaMixin:
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 tier TEXT NOT NULL DEFAULT '',
-                power INTEGER NOT NULL DEFAULT 1,
                 cost INTEGER NOT NULL DEFAULT 1,
                 equip_per_unit REAL NOT NULL DEFAULT 0.4,
+                requires_tech TEXT NOT NULL DEFAULT '',
+                registered TEXT NOT NULL DEFAULT 'seed',
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- 兵种档注册表（troop_cost.json 打底 + 运行时 LLM 新增）：requires_tech 门控编制
+            CREATE TABLE IF NOT EXISTS troop_tiers (
+                name TEXT PRIMARY KEY,
+                category TEXT NOT NULL DEFAULT '',
+                per_kilo REAL NOT NULL DEFAULT 0,
                 requires_tech TEXT NOT NULL DEFAULT '',
                 registered TEXT NOT NULL DEFAULT 'seed',
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

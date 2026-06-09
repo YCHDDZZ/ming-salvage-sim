@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
@@ -1226,36 +1228,52 @@ def extract_scores_by_modules_with_agno(
     relevant_memories: Optional[List[Dict[str, object]]] = None,
     secret_orders: Optional[List[Dict[str, object]]] = None,
 ) -> tuple[Dict[str, object], str, str]:
-    """四模块结算 extractor：内政财政、军务外势、局势、人事密令。"""
+    """四模块结算 extractor：内政财政、军务外势、局势、人事密令。
+
+    调度：串行跑第 1 个模块把共享 system 前缀（game_world+simulator_context+extractor 契约）
+    的 prompt 缓存建好（cache_creation），后 3 个模块再并行打过去——它们 system 前缀与第 1 个
+    相同，在缓存 TTL 内并发命中，省墙钟又省 cache_creation。先暖后并发，不让 4 个一起 miss。"""
     base_payload = _extractor_context_payload(
         db, state, narrative, decree_text,
         relevant_memories=relevant_memories,
         secret_orders=secret_orders,
     )
-    module_outputs: Dict[str, Dict[str, object]] = {}
-    module_raw: Dict[str, str] = {}
+    fiscal_cfg = base_payload.get("fiscal_config") if isinstance(base_payload.get("fiscal_config"), dict) else None
     module_inputs: Dict[str, object] = {}
-    for module in EXTRACTION_MODULES:
+    # sanitizer 是共享单实例，解析失败（小概率）才用；并行下加锁串行化这一步，避免并发调用同一 agent。
+    sanitizer_lock = threading.Lock()
+
+    def _run_one(module: str) -> Dict[str, object]:
         agent = agents[module]
         payload = _payload_for_module(base_payload, module)
-        module_inputs[module] = payload
+        module_inputs[module] = payload  # 各线程写不同 key，dict 单键赋值原子（GIL），安全
         payload_json = json.dumps(payload, ensure_ascii=False, sort_keys=False)
         tlog(f"[extractor/{module}] user payload total={len(payload_json)} chars (~{len(payload_json)//1.5:.0f} tok)")
         raw = run_agent_text(agent, payload_json, tag=f"extractor/{module}")
-        module_raw[module] = raw
         try:
             parsed = parse_agent_json(raw, f"结算抽取-{module}")
         except Exception as parse_err:
             if sanitizer is None:
                 raise
             tlog(f"[extractor/{module}] 主输出解析失败：{parse_err}；调 sanitizer 重整")
-            cleaned = run_agent_text(sanitizer, raw, tag=f"sanitizer/{module}")
+            with sanitizer_lock:
+                cleaned = run_agent_text(sanitizer, raw, tag=f"sanitizer/{module}")
             parsed = parse_agent_json(cleaned, f"结算抽取-{module}（sanitizer）")
-        module_outputs[module] = _sanitize_module_output(
-            module,
-            parsed,
-            fiscal_config=base_payload.get("fiscal_config") if isinstance(base_payload.get("fiscal_config"), dict) else None,
-        )
+        return _sanitize_module_output(module, parsed, fiscal_config=fiscal_cfg)
+
+    module_outputs: Dict[str, Dict[str, object]] = {}
+    first, rest = EXTRACTION_MODULES[0], EXTRACTION_MODULES[1:]
+    # 1) 串行暖缓存：第 1 个模块单独跑，建好共享 system 前缀的 prompt 缓存。
+    tlog(f"[extractor] 串行暖缓存 module={first}")
+    module_outputs[first] = _run_one(first)
+    # 2) 并行：后 3 个模块共用已暖好的前缀缓存，并发命中。
+    if rest:
+        tlog(f"[extractor] 并行抽取 modules={list(rest)}")
+        with ThreadPoolExecutor(max_workers=len(rest)) as pool:
+            futures = {pool.submit(_run_one, m): m for m in rest}
+            for fut in as_completed(futures):
+                m = futures[fut]
+                module_outputs[m] = fut.result()  # 子线程异常在此重抛，与串行同行为
     merged = _merge_module_outputs(module_outputs)
     merged = filter_unmentioned_personnel_changes(
         merged,

@@ -194,6 +194,7 @@ def load_army_content() -> Dict[str, Army]:
             item.get("troop_composition"),
             fallback_troop_type=str(item.get("troop_type") or ""),
             fallback_manpower=int(item.get("manpower") or 0),
+            troop_cost=troop_cost,
         )
         troop_type = troop_type_from_composition(troop_composition) or str_field(item, "troop_type", f"armies.json.armies[{idx}]")
         manpower = sum(troop_composition.values()) if troop_composition else int_field(item, "manpower", f"armies.json.armies[{idx}]")
@@ -532,17 +533,60 @@ def load_troop_cost() -> "Dict[str, object]":
         keywords = string_list(item.get("keywords"), f"{path}.keywords")
         if not keywords:
             raise SystemExit(f"{path}: keywords 不可为空")
-        tiers.append({"tier": tier, "per_kilo": per_kilo, "keywords": keywords})
+        tiers.append({
+            "tier": tier,
+            "per_kilo": per_kilo,
+            "keywords": keywords,
+            "requires_tech": str(item.get("requires_tech") or ""),
+            "category": str(item.get("category") or ""),
+            "upgrades": list(item.get("upgrades") or []),
+        })
     if default_tier not in names:
         raise SystemExit(f"troop_cost.json: default_tier '{default_tier}' 不在 tiers 中")
     return {"version": version, "default_tier": default_tier, "tiers": tiers}
 
 
-def normalize_troop_composition(value: object, *, fallback_troop_type: str = "", fallback_manpower: int = 0) -> Dict[str, int]:
+def _match_troop_tier(name: str, troop_cost: Dict[str, object]) -> Optional[Dict[str, object]]:
+    """据兵种名/自由文本找命中的 tier 档（不兜底 default）。
+    ① 先按 tier 名**精确**命中——composition 的 key 已是规范名，这条几乎总中，且杜绝
+       「骑兵」吃「骠骑兵」这类短名吃长名（精确名优先于子串关键词）。
+    ② 都不精确命中（传入是 LLM 自由串/番号）→ 收集**所有**关键词子串命中的档，取 per_kilo
+       **最贵**的一档（兑现「军内取最贵兵种」契约，不再随 tiers 的 JSON 顺序漂移）。
+    返回命中的 tier dict，或 None（无任何命中，由调用方决定兜底）。"""
+    text = str(name or "")
+    tiers = troop_cost.get("tiers") or []
+    for tier in tiers:
+        if text == str(tier.get("tier") or ""):
+            return tier
+    hits = [tier for tier in tiers
+            if any(kw and kw in text for kw in tier.get("keywords", []))]
+    if hits:
+        return max(hits, key=lambda t: float(t.get("per_kilo") or 0.0))
+    return None
+
+
+def canon_troop_name(name: str, troop_cost: Dict[str, object]) -> str:
+    """把任意兵种名/番号/自由串归一成固定兵种名（troop_cost 闭集里的 tier 名）。
+    命中走 _match_troop_tier（精确优先、关键词取最贵）；无命中兜底 default_tier。
+    归一与算饷（troop_rate_for_type）共用同一匹配内核，杜绝两套逻辑错配。"""
+    tier = _match_troop_tier(name, troop_cost)
+    if tier is not None:
+        return str(tier.get("tier") or "")
+    return str(troop_cost.get("default_tier") or "非正规步兵")
+
+
+def normalize_troop_composition(
+    value: object,
+    *,
+    fallback_troop_type: str = "",
+    fallback_manpower: int = 0,
+    troop_cost: Dict[str, object] | None = None,
+) -> Dict[str, int]:
+    spec = troop_cost or {}
     if isinstance(value, dict):
         out: Dict[str, int] = {}
         for key, raw_amount in value.items():
-            troop = str(key).strip()
+            troop = canon_troop_name(str(key).strip(), spec)
             try:
                 amount = int(raw_amount)
             except (TypeError, ValueError):
@@ -552,7 +596,7 @@ def normalize_troop_composition(value: object, *, fallback_troop_type: str = "",
         return out
     text = str(fallback_troop_type or "").strip()
     if text and fallback_manpower > 0:
-        return {text: int(fallback_manpower)}
+        return {canon_troop_name(text, spec): int(fallback_manpower)}
     return {}
 
 
@@ -561,14 +605,12 @@ def troop_type_from_composition(composition: Dict[str, int]) -> str:
 
 
 def troop_rate_for_type(troop_type: str, troop_cost: Dict[str, object]) -> float:
-    tiers = troop_cost.get("tiers") or []
-    text = str(troop_type or "")
-    for tier in tiers:
-        for kw in tier.get("keywords", []):
-            if kw and kw in text:
-                return float(tier["per_kilo"])
+    """据兵种名/自由文本返回月饷单价（万两/千人）。精确名优先、关键词取最贵命中、兜底 default_tier。"""
+    tier = _match_troop_tier(troop_type, troop_cost)
+    if tier is not None:
+        return float(tier["per_kilo"])
     default_tier = troop_cost.get("default_tier")
-    for tier in tiers:
+    for tier in troop_cost.get("tiers") or []:
         if tier.get("tier") == default_tier:
             return float(tier["per_kilo"])
     return 0.0
@@ -626,7 +668,6 @@ def load_weapons() -> "Dict[str, object]":
         tpath = f"weapons.json.tiers[{tier_name}]"
         tdict = require_dict(tier_val, tpath)
         tiers[str(tier_name)] = {
-            "power": int_field(tdict, "power", tpath),
             "cost": int_field(tdict, "cost", tpath),
             "equip_per_unit": _float_field(tdict, "equip_per_unit", tpath),
             "keywords": string_list(tdict.get("keywords"), f"{tpath}.keywords"),
@@ -655,7 +696,6 @@ def load_weapons() -> "Dict[str, object]":
             "id": wid,
             "name": name,
             "tier": tier,
-            "power": int_field(item, "power", path),
             "cost": int_field(item, "cost", path),
             "equip_per_unit": _float_field(item, "equip_per_unit", path),
             "requires_tech": str(item.get("requires_tech") or ""),
@@ -819,8 +859,7 @@ class GameContent:
             "id": _slug_weapon_id(key),
             "name": key,
             "tier": chosen,
-            "power": int(tdef.get("power", 1)),  # type: ignore[union-attr]
-            "cost": int(tdef.get("cost", 1)),
+            "cost": int(tdef.get("cost", 1)),  # type: ignore[union-attr]
             "equip_per_unit": float(tdef.get("equip_per_unit", 0.4)),
             "requires_tech": "",
             "registered": "runtime",
